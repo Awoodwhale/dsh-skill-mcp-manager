@@ -20,7 +20,9 @@ declare global {
 }
 
 window.__ModuleLoader__.load({
-  id: 'dsh-skill-mcp-manager',
+  // The module system keys this entry by package name, so the id must be the
+  // package name verbatim; a pseudo name leaves the plugin unregistered.
+  id: '@awoodwhale/dsh-skill-mcp-manager',
   factory: (require) => {
     const module = { exports: {} }
     const exports = module.exports

@@ -2,6 +2,10 @@
 
 版本从 0.1.0 重新起算。0.1.0 之后的段落记录首次发布前的开发过程；0.1.0 这一条写的是第一次发布时插件已有的全部能力。
 
+## 0.1.1
+
+- 从 npm 装进来之后界面整片空白：浏览器半边的 `__ModuleLoader__.load` 用的是 `dsh-skill-mcp-manager`，而模块系统按包名 `@awoodwhale/dsh-skill-mcp-manager` 找它，两边对不上就报 `loaded without registering`。现在两处都用包名。
+
 ## 0.1.0（首次发布）
 
 - 发布到 npm，包名 `@awoodwhale/dsh-skill-mcp-manager`，GitHub 仓库 `Awoodwhale/dsh-skill-mcp-manager`。

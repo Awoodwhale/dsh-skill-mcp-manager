@@ -137,7 +137,7 @@ for (const [index, method] of RPC_ENDPOINTS.entries()) {
   await load('lib/client.js')
   assert.equal(captured.length, 1, '客户端只注册一个模块')
   const entry = captured[0]
-  assert.equal(entry.id, 'dsh-skill-mcp-manager', '浏览器半边的模块 id 保持这个固定名字，与 npm 包名无关')
+  assert.equal(entry.id, RPC_PACKAGE, '模块 id 必须是包名，浏览器侧的模块系统按包名找它')
   assert.equal(typeof entry.factory, 'function')
   delete globalThis.window
 

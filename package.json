@@ -1,6 +1,6 @@
 {
   "name": "@awoodwhale/dsh-skill-mcp-manager",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Skills and MCP server management for DeepSeek Harness (DSH) at global, project, and session scope — one page for skills and one for MCP servers, a sidebar entry for each, temporary toggles in the composer, and a conversation tab for each, so what the model can see is decided where you work.",
   "repository": {
     "type": "git",
