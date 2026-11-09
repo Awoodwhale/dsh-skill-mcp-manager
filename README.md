@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/branding/banner.png" alt="dsh-skill-mcp-manager" width="100%">
+  <img src="assets/branding/banner.jpg" alt="dsh-skill-mcp-manager：按项目、按会话管理 SKILL 与 MCP" width="100%">
 </p>
 
 <div align="center">
@@ -55,7 +55,7 @@ MCP 服务器编辑器左边填、右边即时显示挂载参数，环境变量�
 
 ![添加 MCP 服务器](docs/images/mcp-editor.png)
 
-会话级的技能目录挑一次就够，列表里是会话名称与项目目录：
+会话技能页先挑一条会话，列表按名称与目录排，没有标题的会话显示成 `未命名会话(session-…)`：
 
 ![会话挑选](docs/images/session-picker.png)
 
@@ -65,7 +65,7 @@ MCP 服务器编辑器左边填、右边即时显示挂载参数，环境变量�
 
 ```bash
 # npm 上的包
-dsh plugin --profile web add dsh-skill-mcp-manager
+dsh plugin --profile web add @awoodwhale/dsh-skill-mcp-manager
 
 # 或者这个仓库的本地副本（先在仓库里跑 npm install，prepare 会构建出 lib/）
 dsh plugin --profile web add /absolute/path/to/dsh-skill-mcp-manager
@@ -90,8 +90,8 @@ cat ~/.dsh/dsh-skill-mcp-manager/state.json
 里面写着这次加载的版本、记录文件位置、当前连上的条数。
 
 ```bash
-dsh plugin --profile web update dsh-skill-mcp-manager   # 升级
-dsh plugin --profile web remove dsh-skill-mcp-manager   # 卸载，记录文件与技能文件都留在原地
+dsh plugin --profile web update @awoodwhale/dsh-skill-mcp-manager   # 升级
+dsh plugin --profile web remove @awoodwhale/dsh-skill-mcp-manager   # 卸载，记录文件与技能文件都留在原地
 ```
 
 ## 使用
@@ -131,8 +131,8 @@ dsh plugin --profile web remove dsh-skill-mcp-manager   # 卸载，记录文件�
 
 ```markdown
 ---
-name: splunk-query
-description: 查 Splunk 安全日志，支持离线与在线两个集群
+name: release-notes
+description: 把一周的提交整理成发布说明，按模块分组
 ---
 
 正文……
@@ -277,6 +277,18 @@ npm run typecheck
 
 `test/fixture/mcp-server.mjs` 是一个零依赖的 MCP stdio 服务，提供 `echo` 与 `add` 两个工具，用来手工走一遍完整链路：MCP 页添加服务器，选「本地进程」，命令 `node`，参数 `test/fixture/mcp-server.mjs`，保存后卡片上应该出现两个 `mcp__…` 工具名。
 
+## 发布
+
+推一条 GitHub Release 就会发一次 npm。工作流在 [.github/workflows/release.yml](.github/workflows/release.yml)：
+
+1. 在仓库的 Actions secrets 里放一个 npm 的 automation token，名字 `NPM_TOKEN`，账号要有 `@awoodwhale` 作用域的发布权限。
+2. 改 `package.json` 的 `version`，在 `CHANGELOG.md` 里写一段，提交。
+3. `gh release create v<版本> --title v<版本> --notes "<那一段>"`。
+
+工作流会先校验 tag 与 `package.json` 的版本一致，再跑构建、生成物比对、类型检查与测试，最后 `npm publish --access public --provenance`。版本号对不上或测试不过都会停在发布之前。
+
+第一次跑会停在 `npm error code ENEEDAUTH`，因为仓库里还没有 `NPM_TOKEN`。这个 secret 用 npm 的 granular access token：作用域选 `@awoodwhale`，权限给 Read and write，类型选 Automation。填好之后在 Actions 页面里重跑那条失败的 run（`Re-run all jobs`）就会发布同一个版本号，不需要重新发 Release。
+
 ## 反馈
 
 遇到问题请带上：DSH 版本、插件版本（页头写着）、复现步骤，界面问题附截图。`~/.dsh/dsh-skill-mcp-manager/state.json` 里记录了当前加载的版本与产物路径，贴出来最快定位。
@@ -284,3 +296,5 @@ npm run typecheck
 ## 许可证
 
 [Apache License 2.0](LICENSE)
+
+`assets/logos/` 里的品牌图标取自 [Simple Icons](https://simpleicons.org/)（CC0 1.0 授权），各标识归其所有者。它们只用来在界面上认出技能与服务器来自哪个 agent，不表示任何隶属或背书关系。

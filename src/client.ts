@@ -20,7 +20,9 @@ declare global {
 }
 
 window.__ModuleLoader__.load({
-  id: 'dsh-skill-mcp-manager',
+  // The module system keys this entry by package name, so the id must be the
+  // package name verbatim; a pseudo name leaves the plugin unregistered.
+  id: '@awoodwhale/dsh-skill-mcp-manager',
   factory: (require) => {
     const module = { exports: {} }
     const exports = module.exports
@@ -28,6 +30,8 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const primitives = require('@deepseek-ai/dsh-client-ui-primitives')
     const h = React.createElement
+    /** The published package name. Slot keys that name a bundle use it verbatim. */
+    const PACKAGE_NAME = '@awoodwhale/dsh-skill-mcp-manager'
     const Button = primitives.Button
     const Input = primitives.Input
     const Modal = primitives.Modal
@@ -2736,9 +2740,10 @@ window.__ModuleLoader__.load({
 
       // The bundle's page in the plugin list carries the same switches, so a person
       // who found the plugin there does not have to open one of its pages first.
+      // The slot keys by package name, which is how the host lists this bundle.
       ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
         name: 'plugins.bundle.config',
-        key: 'dsh-skill-mcp-manager',
+        key: PACKAGE_NAME,
         inject: () => ({ api: capturedApi }),
       }, PluginSettings))
 
