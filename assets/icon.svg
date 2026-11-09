@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="skill 与 MCP 管理">
+  <defs>
+    <linearGradient id="acap-logo-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4f8cf7"/>
+      <stop offset="1" stop-color="#3b45d6"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#acap-logo-bg)"/>
+  <rect x="13" y="12" width="27" height="35" rx="6" fill="#ffffff"/>
+  <path d="M19.5 21.5h14M19.5 28.5h14M19.5 35.5h8.5" stroke="#3b45d6" stroke-width="2.8" stroke-linecap="round"/>
+  <circle cx="45" cy="44" r="10" fill="#ffffff"/>
+  <path d="M41 44.2l2.9 2.9 5.4-5.6" stroke="#3b45d6" stroke-width="2.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

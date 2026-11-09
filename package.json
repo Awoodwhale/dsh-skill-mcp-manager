@@ -1,0 +1,100 @@
+{
+  "name": "dsh-skill-mcp-manager",
+  "version": "0.3.6",
+  "description": "Skills and MCP server management for DeepSeek Harness (DSH) at global, project, and session scope — one page for skills and one for MCP servers, a sidebar entry for each, temporary toggles in the composer, and a conversation tab for each, so what the model can see is decided where you work.",
+  "icon": "assets/icon.svg",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json",
+    "./remote": {
+      "types": "./lib/remote.d.ts",
+      "default": "./lib/remote.js"
+    },
+    "./typert": {
+      "types": "./lib/typert.d.ts",
+      "default": "./lib/typert.js"
+    }
+  },
+  "files": [
+    "lib",
+    "src",
+    "scripts",
+    "assets",
+    "tsconfig.json",
+    "tsconfig.client.json",
+    "cordis.patch.yml",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "skill",
+    "mcp",
+    "model-context-protocol",
+    "settings-panel",
+    "sidebar-panel"
+  ],
+  "license": "Apache-2.0",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "build": "npm run generate:remote && npm run generate:logos && tsc -p tsconfig.json && esbuild src/client.ts --bundle --format=iife --platform=browser --target=es2020 --outfile=lib/client.js --log-level=warning",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json",
+    "test": "node test/skills.test.mjs && node test/sources.test.mjs && node test/plan.test.mjs && node test/store.test.mjs && node test/remote.test.mjs && node scripts/generate-remote.mjs --check && node scripts/generate-logos.mjs --check",
+    "generate:remote": "node scripts/generate-remote.mjs",
+    "generate:logos": "node scripts/generate-logos.mjs",
+    "prepare": "npm run build"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.5",
+    "@deepseek-ai/dsh-agent": "^0.2.1-rc.2",
+    "@deepseek-ai/dsh-api-remotes": "^0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-connection": "^0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.2.1-rc.2",
+    "@deepseek-ai/dsh-mcp-client": "^0.2.1-rc.2",
+    "@deepseek-ai/dsh-scope": "^0.2.1-rc.2",
+    "@deepseek-ai/dsh-skill": "^0.2.1-rc.2",
+    "@deepseek-ai/dsh-tools": "^0.2.1-rc.2",
+    "@deepseek-ai/dsh-typert-protocol": "^0.2.1-rc.2",
+    "@deepseek-ai/schemastery": "^3.18.2",
+    "react": "^18.3.1",
+    "yaml": "^2.4.2",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "yaml": "^2.4.2",
+    "zod": "^4.0.0"
+  },
+  "types": "lib/index.d.ts"
+}

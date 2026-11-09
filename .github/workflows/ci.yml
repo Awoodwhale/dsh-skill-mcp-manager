@@ -1,0 +1,43 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # engines 允许 22.19+ 与 24，只跑一个等于另一个没测过。
+        node-version: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      # prepare 会在 npm ci 时跑一次构建，所以下面那条 diff 比对的是
+      # 「生成物是否与源码一致」，端点或图标改了没重新生成就会在这里失败。
+      - run: npm ci
+      - run: npm run build
+      - run: git diff --exit-code -- src/remote.ts src/typert.ts src/logos.ts lib/
+      - run: npm run typecheck
+      - run: npm test
+
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # 包被消费者看到的唯一形态就是 tarball，能装起来才叫能用。
+      - run: npm ci
+      - run: npm pack
+      - run: mkdir -p /tmp/pack-smoke && cd /tmp/pack-smoke && npm init -y >/dev/null && npm install "$GITHUB_WORKSPACE"/dsh-skill-mcp-manager-*.tgz
+      - run: node -e "import('dsh-skill-mcp-manager').then((m) => { if (typeof m.apply !== 'function') throw new Error('module did not load'); })"
+        working-directory: /tmp/pack-smoke
+      - run: test -f node_modules/dsh-skill-mcp-manager/lib/client.js
+        working-directory: /tmp/pack-smoke
