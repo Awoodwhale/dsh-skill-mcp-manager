@@ -1,7 +1,7 @@
 // 该文件由 scripts/generate-remote.mjs 生成，请勿手改（改 src/endpoints.ts 后重新生成）。
 import { z } from "zod"
 
-const PKG = "dsh-skill-mcp-manager"
+const PKG = "@awoodwhale/dsh-skill-mcp-manager"
 const SERVICE = "skillMcpManager"
 const direct = { kind: "direct" }
 const jsonCodec = (typeSymbol) => {

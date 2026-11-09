@@ -5,4 +5,4 @@
 # serves it to the Web app.
 - insert:
     - id: skill-mcp-manager
-      name: dsh-skill-mcp-manager
+      name: '@awoodwhale/dsh-skill-mcp-manager'

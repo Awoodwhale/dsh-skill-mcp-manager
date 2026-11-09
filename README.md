@@ -65,7 +65,7 @@ MCP 服务器编辑器左边填、右边即时显示挂载参数，环境变量�
 
 ```bash
 # npm 上的包
-dsh plugin --profile web add dsh-skill-mcp-manager
+dsh plugin --profile web add @awoodwhale/dsh-skill-mcp-manager
 
 # 或者这个仓库的本地副本（先在仓库里跑 npm install，prepare 会构建出 lib/）
 dsh plugin --profile web add /absolute/path/to/dsh-skill-mcp-manager
@@ -90,8 +90,8 @@ cat ~/.dsh/dsh-skill-mcp-manager/state.json
 里面写着这次加载的版本、记录文件位置、当前连上的条数。
 
 ```bash
-dsh plugin --profile web update dsh-skill-mcp-manager   # 升级
-dsh plugin --profile web remove dsh-skill-mcp-manager   # 卸载，记录文件与技能文件都留在原地
+dsh plugin --profile web update @awoodwhale/dsh-skill-mcp-manager   # 升级
+dsh plugin --profile web remove @awoodwhale/dsh-skill-mcp-manager   # 卸载，记录文件与技能文件都留在原地
 ```
 
 ## 使用
@@ -276,6 +276,16 @@ npm run typecheck
 ```
 
 `test/fixture/mcp-server.mjs` 是一个零依赖的 MCP stdio 服务，提供 `echo` 与 `add` 两个工具，用来手工走一遍完整链路：MCP 页添加服务器，选「本地进程」，命令 `node`，参数 `test/fixture/mcp-server.mjs`，保存后卡片上应该出现两个 `mcp__…` 工具名。
+
+## 发布
+
+推一条 GitHub Release 就会发一次 npm。工作流在 [.github/workflows/release.yml](.github/workflows/release.yml)：
+
+1. 在仓库的 Actions secrets 里放一个 npm 的 automation token，名字 `NPM_TOKEN`，账号要有 `@awoodwhale` 作用域的发布权限。
+2. 改 `package.json` 的 `version`，在 `CHANGELOG.md` 里写一段，提交。
+3. `gh release create v<版本> --title v<版本> --notes "<那一段>"`。
+
+工作流会先校验 tag 与 `package.json` 的版本一致，再跑构建、生成物比对、类型检查与测试，最后 `npm publish --access public --provenance`。版本号对不上或测试不过都会停在发布之前。
 
 ## 反馈
 

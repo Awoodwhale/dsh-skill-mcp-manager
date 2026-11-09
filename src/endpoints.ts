@@ -3,7 +3,9 @@
  * into the ./remote and ./typert artifacts, and the browser half mounts what the generator produced —
  * so the three never drift. Regenerate with `npm run generate:remote`.
  */
-export const RPC_PACKAGE = 'dsh-skill-mcp-manager'
+
+/** The published package name, under the npm @awoodwhale scope. `dsh plugin add` takes exactly this. */
+export const RPC_PACKAGE = '@awoodwhale/dsh-skill-mcp-manager'
 
 /**
  * The cordis service name the host registers (super(ctx, 'skillMcpManager')) and the namespace the

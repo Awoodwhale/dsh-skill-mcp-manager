@@ -100,8 +100,12 @@ export const inject = ['skills', 'tools', 'agents']
 
 const HOME = homedir()
 const DSH_HOME = process.env.DSH_HOME ?? join(HOME, '.dsh')
-/** Everything this plugin writes lives under one directory of its own. */
-const STATE_DIR = join(DSH_HOME, 'dsh-skill-mcp-manager')
+/**
+ * Everything this plugin writes lives under one directory of its own. The name is pinned rather than
+ * taken from the package: the npm scope is a publishing detail, and a rename must not orphan records.
+ */
+const DATA_DIR = 'dsh-skill-mcp-manager'
+const STATE_DIR = join(DSH_HOME, DATA_DIR)
 const STORE_FILE = join(STATE_DIR, 'store.json')
 const HEARTBEAT_FILE = join(STATE_DIR, 'state.json')
 /** Session skill folders live here unless a session points somewhere else. */
@@ -120,13 +124,13 @@ function readPluginInfo() {
     const modulePath = fileURLToPath(import.meta.url)
     const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
     return {
-      name: typeof manifest.name === 'string' ? manifest.name : 'dsh-skill-mcp-manager',
+      name: typeof manifest.name === 'string' ? manifest.name : 'skill-mcp-manager',
       version: typeof manifest.version === 'string' ? manifest.version : '0.0.0',
       origin: modulePath.split(/[\\/]/u).includes('node_modules') ? 'npm' : 'local',
       modulePath,
     }
   } catch {
-    return { name: 'dsh-skill-mcp-manager', version: '0.0.0', origin: 'local', modulePath: '' }
+    return { name: 'skill-mcp-manager', version: '0.0.0', origin: 'local', modulePath: '' }
   }
 }
 

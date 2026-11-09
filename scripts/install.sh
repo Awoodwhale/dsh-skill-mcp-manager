@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Install dsh-skill-mcp-manager into a DSH profile.
+# Install @awoodwhale/dsh-skill-mcp-manager into a DSH profile.
 #
 #   bash scripts/install.sh                    # published package, profile "web"
 #   bash scripts/install.sh my-profile         # another profile
 #   bash scripts/install.sh web .              # this checkout (development)
-#   bash scripts/install.sh web dsh-skill-mcp-manager@0.2.0   # a pinned version
+#   bash scripts/install.sh web @awoodwhale/dsh-skill-mcp-manager@0.1.0   # a pinned version
 set -euo pipefail
 
 PROFILE="${1:-web}"
-TARGET="${2:-dsh-skill-mcp-manager}"
+TARGET="${2:-@awoodwhale/dsh-skill-mcp-manager}"
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if ! command -v dsh >/dev/null 2>&1; then
@@ -61,7 +61,7 @@ dsh.profile.bundles is read at STARTUP, so restart the host now:
 Then check it loaded:
 
     cat "${STATE}"
-    # 设置 → 技能管理 / MCP 管理      两个管理页
+    # 设置 → SKILL管理 / MCP管理      两个管理页
 
 Skills and MCP servers live in one file, shared by every profile unless you override config.storePath:
 
@@ -69,6 +69,6 @@ Skills and MCP servers live in one file, shared by every profile unless you over
 
 Later, from the same profile:
 
-    dsh plugin --profile ${PROFILE} update dsh-skill-mcp-manager    # upgrade
-    dsh plugin --profile ${PROFILE} remove dsh-skill-mcp-manager    # uninstall (the record stays)
+    dsh plugin --profile ${PROFILE} update @awoodwhale/dsh-skill-mcp-manager    # upgrade
+    dsh plugin --profile ${PROFILE} remove @awoodwhale/dsh-skill-mcp-manager    # uninstall (the record stays)
 TIP

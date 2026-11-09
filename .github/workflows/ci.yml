@@ -36,8 +36,10 @@ jobs:
       # 包被消费者看到的唯一形态就是 tarball，能装起来才叫能用。
       - run: npm ci
       - run: npm pack
-      - run: mkdir -p /tmp/pack-smoke && cd /tmp/pack-smoke && npm init -y >/dev/null && npm install "$GITHUB_WORKSPACE"/dsh-skill-mcp-manager-*.tgz
-      - run: node -e "import('dsh-skill-mcp-manager').then((m) => { if (typeof m.apply !== 'function') throw new Error('module did not load'); })"
+      - id: pack
+        run: echo "tarball=$(ls *.tgz)" >> "$GITHUB_OUTPUT"
+      - run: mkdir -p /tmp/pack-smoke && cd /tmp/pack-smoke && npm init -y >/dev/null && npm install "$GITHUB_WORKSPACE"/${{ steps.pack.outputs.tarball }}
+      - run: node -e "import('@awoodwhale/dsh-skill-mcp-manager').then((m) => { if (typeof m.apply !== 'function') throw new Error('module did not load'); })"
         working-directory: /tmp/pack-smoke
-      - run: test -f node_modules/dsh-skill-mcp-manager/lib/client.js
+      - run: test -f node_modules/@awoodwhale/dsh-skill-mcp-manager/lib/client.js
         working-directory: /tmp/pack-smoke

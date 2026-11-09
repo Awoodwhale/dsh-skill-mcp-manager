@@ -18,7 +18,7 @@ for (const name of ['equal', 'deepEqual', 'ok', 'match', 'notEqual', 'throws']) 
 
 const { planCandidates } = await import(new URL('../lib/plan.js', import.meta.url).href)
 
-const PROVIDER = 'agent-capabilities'
+const PROVIDER = 'skill-mcp-manager'
 
 const skill = (name, extra = {}) => ({
   name,

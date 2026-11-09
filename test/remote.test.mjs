@@ -10,6 +10,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import YAML from 'yaml'
 
 let assertions = 0
 for (const name of ['equal', 'deepEqual', 'ok', 'match', 'notEqual', 'throws']) {
@@ -32,7 +33,7 @@ const { RPC_CHANNEL, RPC_ENDPOINTS, RPC_NO_INPUT, RPC_PACKAGE, RPC_SERVICE } = e
 
 // ── the endpoint list itself ───────────────────────────────────────────────
 
-assert.equal(RPC_PACKAGE, 'dsh-skill-mcp-manager')
+assert.equal(RPC_PACKAGE, '@awoodwhale/dsh-skill-mcp-manager')
 assert.equal(RPC_SERVICE, 'skillMcpManager')
 assert.equal(RPC_CHANNEL, '/skill-mcp-manager')
 assert.equal(new Set(RPC_ENDPOINTS).size, RPC_ENDPOINTS.length, '端点不能重复')
@@ -136,7 +137,7 @@ for (const [index, method] of RPC_ENDPOINTS.entries()) {
   await load('lib/client.js')
   assert.equal(captured.length, 1, '客户端只注册一个模块')
   const entry = captured[0]
-  assert.equal(entry.id, 'dsh-skill-mcp-manager')
+  assert.equal(entry.id, 'dsh-skill-mcp-manager', '浏览器半边的模块 id 保持这个固定名字，与 npm 包名无关')
   assert.equal(typeof entry.factory, 'function')
   delete globalThis.window
 
@@ -217,7 +218,8 @@ for (const [index, method] of RPC_ENDPOINTS.entries()) {
   }
   const patch = text('cordis.patch.yml')
   assert.equal(patch.includes('id: skill-mcp-manager'), true)
-  assert.equal(patch.includes('name: dsh-skill-mcp-manager'), true)
+  const rows = YAML.parse(patch)
+  assert.equal(rows[0].insert[0].name, manifest.name, 'patch 里的 loader 行要用包名')
   // The plugin list draws the package icon from this field; a missing file or an
   // oversized one leaves the page with a blank square.
   assert.equal(manifest.icon, 'assets/icon.svg')
