@@ -2,6 +2,11 @@
 
 版本从 0.1.0 重新起算。0.1.0 之后的段落记录首次发布前的开发过程；0.1.0 这一条写的是第一次发布时插件已有的全部能力。
 
+## 0.1.2
+
+- 发布工作流改走 npm 的 Trusted Publisher，仓库里不再需要 token；README 的发布一节同步改写。
+- README 引用的五张截图补进仓库。之前 `.gitignore` 里的 `images/` 规则把 `docs/images/` 也挡住了，GitHub 上显示成坏图。
+
 ## 0.1.1
 
 - 从 npm 装进来之后界面整片空白：浏览器半边的 `__ModuleLoader__.load` 用的是 `dsh-skill-mcp-manager`，而模块系统按包名 `@awoodwhale/dsh-skill-mcp-manager` 找它，两边对不上就报 `loaded without registering`。现在两处都用包名。
