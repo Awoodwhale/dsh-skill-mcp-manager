@@ -55,7 +55,7 @@ MCP 服务器编辑器左边填、右边即时显示挂载参数，环境变量�
 
 ![添加 MCP 服务器](docs/images/mcp-editor.png)
 
-会话技能页先挑一条会话，列表按名称与目录排，没有标题的会话显示成 `未命名会话(session-…)`：
+会话级的技能目录挑一次就够，列表里是会话名称与项目目录：
 
 ![会话挑选](docs/images/session-picker.png)
 
