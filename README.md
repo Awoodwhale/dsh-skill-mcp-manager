@@ -281,13 +281,12 @@ npm run typecheck
 
 推一条 GitHub Release 就会发一次 npm。工作流在 [.github/workflows/release.yml](.github/workflows/release.yml)：
 
-1. 在仓库的 Actions secrets 里放一个 npm 的 automation token，名字 `NPM_TOKEN`，账号要有 `@awoodwhale` 作用域的发布权限。
-2. 改 `package.json` 的 `version`，在 `CHANGELOG.md` 里写一段，提交。
-3. `gh release create v<版本> --title v<版本> --notes "<那一段>"`。
+1. 改 `package.json` 的 `version`，在 `CHANGELOG.md` 里写一段，提交。
+2. `gh release create v<版本> --title v<版本> --notes "<那一段>"`。
 
 工作流会先校验 tag 与 `package.json` 的版本一致，再跑构建、生成物比对、类型检查与测试，最后 `npm publish --access public --provenance`。版本号对不上或测试不过都会停在发布之前。
 
-第一次跑会停在 `npm error code ENEEDAUTH`，因为仓库里还没有 `NPM_TOKEN`。这个 secret 用 npm 的 granular access token：作用域选 `@awoodwhale`，权限给 Read and write，类型选 Automation。填好之后在 Actions 页面里重跑那条失败的 run（`Re-run all jobs`）就会发布同一个版本号，不需要重新发 Release。
+凭据来自 npm 的 Trusted Publisher：在 npm 上包的 Settings → Trusted publishing 里填发行方 `Awoodwhale`、仓库 `dsh-skill-mcp-manager`、工作流文件名 `release.yml`，此后工作流用 OIDC 现场换发布凭据，仓库里不需要放任何 token。包必须先发布过一次才能绑定，所以第一个版本是手工 `npm publish` 出来的。
 
 ## 反馈
 

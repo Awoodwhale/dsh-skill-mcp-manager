@@ -37,6 +37,6 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
+      # npm 上的 Trusted Publisher 认这个仓库与这个文件名，凭据由 OIDC 现场换，
+      # 不再需要 NPM_TOKEN。
       - run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
