@@ -3,8 +3,9 @@
  * decide which skill folders a scope reads, the validation every MCP record goes
  * through, and the mapping from a record to the plugin config that makes it real.
  *
- * Node built-ins only, run with `npm test`. Project roots are built under the system
- * temporary directory.
+ * Node built-ins only, run with `npm test`. Project roots are created in a temporary
+ * directory outside this package: the root detection walks up looking for `.git`, so a
+ * fixture under the repository itself would inherit the repository's own `.git`.
  */
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'

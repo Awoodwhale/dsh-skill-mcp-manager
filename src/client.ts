@@ -987,7 +987,7 @@ window.__ModuleLoader__.load({
 
       /**
        * How the current anchor is named in a sentence.
-       * @returns a short phrase such as `全局` or `项目 AgentDir`.
+       * @returns a short phrase such as `全局` or `项目 demo-app`.
        */
       anchorText() {
         const anchor = this.anchor()

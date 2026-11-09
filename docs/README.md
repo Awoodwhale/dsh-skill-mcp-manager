@@ -8,7 +8,7 @@
 |---|---|
 | `src/` | 源码。`index.ts` 是宿主半边，`client.ts` 是浏览器半边，`endpoints.ts` 是远程面唯一来源，`store.ts`/`sources.ts`/`plan.ts`/`skills.ts` 是纯逻辑，`remote.ts`/`typert.ts`/`logos.ts` 是生成物 |
 | `lib/` | 构建产物，不进 git。由 `npm run build` 产出，`main` 与 `exports` 指向这里 |
-| `assets/` | 图标源。`icon.svg` 是插件列表与设置页用的图标，`branding/banner.png` 是文档头图，`logos/*.svg` 是十五个 agent 的单色图标 |
+| `assets/` | 图标源。`icon.svg` 是插件列表与设置页用的图标，`branding/banner.jpg` 是文档头图，`logos/*.svg` 是十个品牌的单色图标（WorkBuddy 与 CodeBuddy 共用同一个） |
 | `scripts/` | `generate-remote.mjs` 由端点表生成两份描述文件，`generate-logos.mjs` 由图标源生成 `src/logos.ts`，`install.sh` 把插件装进一个 profile |
 | `test/` | 五个测试文件与一个零依赖的 MCP stdio 服务（`test/fixture/mcp-server.mjs`） |
 | `docs/` | 面向开发者的说明：`architecture.md` 讲结构，`development.md` 讲怎么跑、怎么改、哪里容易踩到问题，`images/` 是 README 用的截图 |

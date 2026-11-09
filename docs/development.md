@@ -15,12 +15,13 @@
 │   ├── store.ts            # 记录文件的规范化与目录规则
 │   ├── sources.ts          # 本机上各个 agent 的技能目录表
 │   ├── plan.ts             # 来源与技能状态 → 注册表候选
-│   └── skills.ts           # SKILL.md 的解析与渲染
+│   ├── skills.ts           # SKILL.md 的解析与渲染
+│   └── logos.ts            # ⚙ 生成物：assets/logos/*.svg 里的路径数据
 ├── lib/                    # ⚙ 构建产物，不进 git
 ├── assets/
 │   ├── icon.svg            # 插件在插件列表里的图标
-│   ├── branding/banner.png # README 头图
-│   └── logos/*.svg         # 15 个 agent 的单色图标（生成 src/logos.ts 的输入）
+│   ├── branding/banner.jpg # README 头图
+│   └── logos/*.svg         # 10 个品牌的单色图标（生成 src/logos.ts 的输入；WorkBuddy 复用 CodeBuddy）
 ├── scripts/
 │   ├── generate-remote.mjs # endpoints.ts → remote.ts / typert.ts
 │   ├── generate-logos.mjs  # assets/logos/*.svg → src/logos.ts
@@ -64,8 +65,8 @@ npm test             # 五个测试文件 + 两份生成物的漂移比对
 ## 本地跑一遍
 
 1. `npm install && npm run build`
-2. 装进一个测试 profile：`bash scripts/install.sh capsui3 .`
-3. 起服务：`dsh --profile capsui3 --port 3105 --no-open`，日志尾行给带 token 的地址
+2. 装进一个测试 profile：`bash scripts/install.sh devtest .`
+3. 起服务：`dsh --profile devtest --port 3105 --no-open`，日志尾行给带 token 的地址
 4. 打开地址，走完欢迎引导，点账号菜单 → 设置 → SKILL管理 / MCP管理
 
 测试时建议用一个全新 profile，避免自己的 skill 目录干扰判断。
