@@ -286,7 +286,9 @@ npm run typecheck
 
 工作流会先校验 tag 与 `package.json` 的版本一致，再跑构建、生成物比对、类型检查与测试，最后 `npm publish --access public --provenance`。版本号对不上或测试不过都会停在发布之前。
 
-凭据来自 npm 的 Trusted Publisher：在 npm 上包的 Settings → Trusted publishing 里填发行方 `Awoodwhale`、仓库 `dsh-skill-mcp-manager`、工作流文件名 `release.yml`，此后工作流用 OIDC 现场换发布凭据，仓库里不需要放任何 token。包必须先发布过一次才能绑定，所以第一个版本是手工 `npm publish` 出来的。
+凭据来自 npm 的 Trusted Publisher：在 npm 上包的 Settings → Trusted Publishing 里填发行方 `Awoodwhale`、仓库 `dsh-skill-mcp-manager`、工作流文件名 `release.yml`，勾上 `Allow npm publish`，此后工作流用 OIDC 现场换发布凭据，仓库里不需要放任何 token。包必须先发布过一次才能绑定，所以第一个版本是手工 `npm publish` 出来的。
+
+Trusted Publisher 只有在发布成功一次之后才会从「Pending validation」变成已验证；在它验证之前，工作流的 OIDC 换不到发布权限，`npm publish` 会报 `E404`（不是权限错误，看起来像包不存在）。遇到这种情况先确认 npm 上那条连接的状态，再补一次手工发布把连接验证掉。
 
 ## 反馈
 
