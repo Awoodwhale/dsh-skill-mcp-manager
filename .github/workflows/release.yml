@@ -1,0 +1,42 @@
+name: release
+
+# 发一条 GitHub Release 就发一次 npm：版本号取自 tag，去掉前缀 v。
+# 同一个版本重复发会在 npm 那边报 already published，宁可失败也不要静默跳过。
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # tag 与 package.json 必须一致，否则装出来的人拿到的版本与页面写的不是一回事。
+      - name: 版本号与 tag 对齐
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          tag="${tag#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          echo "tag=${tag} package.json=${pkg}"
+          test "${tag}" = "${pkg}" || { echo "tag 与 package.json 的版本不一致" >&2; exit 1; }
+
+      - run: npm ci
+      # 生成物、类型、测试在发布前全部再跑一遍；顺手比对构建没有改动仓库里的文件。
+      - run: npm run build
+      - run: git diff --exit-code -- src/remote.ts src/typert.ts src/logos.ts lib/
+      - run: npm run typecheck
+      - run: npm test
+
+      - run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
