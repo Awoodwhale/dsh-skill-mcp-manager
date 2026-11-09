@@ -287,6 +287,8 @@ npm run typecheck
 
 工作流会先校验 tag 与 `package.json` 的版本一致，再跑构建、生成物比对、类型检查与测试，最后 `npm publish --access public --provenance`。版本号对不上或测试不过都会停在发布之前。
 
+第一次跑会停在 `npm error code ENEEDAUTH`，因为仓库里还没有 `NPM_TOKEN`。这个 secret 用 npm 的 granular access token：作用域选 `@awoodwhale`，权限给 Read and write，类型选 Automation。填好之后在 Actions 页面里重跑那条失败的 run（`Re-run all jobs`）就会发布同一个版本号，不需要重新发 Release。
+
 ## 反馈
 
 遇到问题请带上：DSH 版本、插件版本（页头写着）、复现步骤，界面问题附截图。`~/.dsh/dsh-skill-mcp-manager/state.json` 里记录了当前加载的版本与产物路径，贴出来最快定位。
