@@ -9,5 +9,5 @@ dist/
 *.tgz
 lib/
 .test-tmp/
-images/
+/images/
 
