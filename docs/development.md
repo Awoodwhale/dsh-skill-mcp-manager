@@ -15,7 +15,8 @@
 │   ├── store.ts            # 记录文件的规范化与目录规则
 │   ├── sources.ts          # 本机上各个 agent 的技能目录表
 │   ├── plan.ts             # 来源与技能状态 → 注册表候选
-│   └── skills.ts           # SKILL.md 的解析与渲染
+│   ├── skills.ts           # SKILL.md 的解析与渲染
+│   └── logos.ts            # ⚙ 生成物：assets/logos/*.svg 里的路径数据
 ├── lib/                    # ⚙ 构建产物，不进 git
 ├── assets/
 │   ├── icon.svg            # 插件在插件列表里的图标
