@@ -194,7 +194,7 @@ for (const [index, method] of RPC_ENDPOINTS.entries()) {
     assert.equal(RPC_ENDPOINTS.includes(method), true, `页面调用了 host 没有提供的 ${method}`)
   }
   assert.equal(decoded.includes('session-1ddd81ab'), false, '界面文案里不能出现会话标识')
-  assert.equal(decoded.includes('整组关着，单独开着'), true, '来源整组关掉而某个技能单独开着时，那一行要看得出来')
+  assert.equal(decoded.includes('单独开启'), true, '来源里被单独打开的那几个，那一行要看得出来')
   assert.equal(text('lib/index.js').includes('state.forced'), true, '整组关掉后单独开的技能要写进来源记录')
   assert.equal(/^\s*import\s/m.test(client), false, '打包产物里不能留下 import 语句')
 }

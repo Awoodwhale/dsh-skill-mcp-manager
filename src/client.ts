@@ -92,7 +92,6 @@ window.__ModuleLoader__.load({
       { value: 'all', label: '全部状态' },
       { value: 'enabled', label: '已启用' },
       { value: 'disabled', label: '已停用' },
-      { value: 'kept', label: '同名仍在' },
       { value: 'broken', label: '解析异常' },
     ]
     const FORMS = [
@@ -1030,7 +1029,6 @@ window.__ModuleLoader__.load({
         const keepSkill = (skill) => {
           if (stateFilter === 'enabled' && skill.enabled !== true) return false
           if (stateFilter === 'disabled' && skill.enabled === true) return false
-          if (stateFilter === 'kept' && typeof skill.kept !== 'string') return false
           if (stateFilter === 'broken' && skill.valid === true) return false
           if (needle === '') return true
           return `${skill.name} ${skill.description}`.toLowerCase().includes(needle)
@@ -1784,8 +1782,7 @@ window.__ModuleLoader__.load({
               h('code', { key: 'n', className: 'acap-skill-name' }, skill.name),
               skill.form === 'file' ? h(Tag, { key: 'f' }, '单文件') : null,
               skill.valid === false ? h(Tag, { key: 'b', tone: 'err' }, skill.error === '' ? '解析异常' : skill.error) : null,
-              skill.forced === true ? h(Tag, { key: 'fo', tone: 'warn' }, '整组关着，单独开着') : null,
-              typeof skill.kept === 'string' ? h(Tag, { key: 'k', tone: 'warn' }, `同名仍由 ${skill.kept} 提供`) : null,
+              skill.forced === true ? h(Tag, { key: 'fo', tone: 'warn' }, '单独开启') : null,
               skill.modelInvocable === false ? h(Tag, { key: 'mi', tone: 'off' }, '不自动加载') : null,
               skill.userInvocable === false ? h(Tag, { key: 'ui', tone: 'off' }, '不接受 / 命令') : null,
             ]),
@@ -2730,6 +2727,12 @@ window.__ModuleLoader__.load({
       if (capturedApi === undefined) {
         throw new Error('远程服务 skillMcpManager 没有挂上：宿主的 skill-mcp-manager 插件没有加载')
       }
+
+      // 斜杠菜单的技能目录由 dsh-client-ui-skill 按会话缓存，它只在 plugin-manager/changed
+      // 这个事件上清空自己。宿主每次改记录都会发一次，这里订阅一次就把缓存带出去。
+      ctx.remote.$on('plugin-manager/changed', () => {
+        ctx.emit('connection/reset')
+      })
 
       // Confirmations ride the frame-wide overlay, the same layer the shipped plugins use.
       ctx.slots.inject('shell.overlay', () => ctx.slots.register({

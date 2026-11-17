@@ -65,12 +65,32 @@ export const sourceDirOf = (spec, options) => {
   return join(rootDirOf(spec, options), 'skills')
 }
 
-const enabledOf = (state, fallback) => (typeof state?.enabled === 'boolean' ? state.enabled : fallback)
+/** One stored source entry, keyed by catalog id or by absolute directory, with the switches split out. */
+const splitState = (state) => ({
+  enabled: typeof state?.enabled === 'boolean' ? state.enabled : null,
+  disabled: Array.isArray(state?.disabled) ? state.disabled : [],
+  forced: Array.isArray(state?.forced) ? state.forced : [],
+})
 
-const disabledOf = (state) => (Array.isArray(state?.disabled) ? state.disabled : [])
-
-/** 整组关掉之后又被单独叫起来的技能名。 */
-const forcedOf = (state) => (Array.isArray(state?.forced) ? state.forced : [])
+/**
+ * The switches one source ends up with.
+ *
+ * A record either leaves the whole group on, or keeps only the names the person opened
+ * one by one. Opening a single name means that name, so the source hands out names again
+ * while every other name in it is switched off. `disabled` therefore holds exactly the
+ * names that are off, and `forced` is the record of which ones were opened on top of a
+ * group that stays off — it does not itself switch anything off.
+ * @param state - the stored entry, or undefined for a source nobody touched.
+ * @param fallback - the state the catalog says a fresh installation starts in.
+ * @returns `enabled`, `disabled`, `forced`.
+ */
+export const switchesOf = (state, fallback) => {
+  const { enabled, disabled, forced } = splitState(state)
+  const groupOn = typeof enabled === 'boolean' ? enabled : fallback
+  const opened = new Set(forced)
+  const off = disabled.filter((name) => !opened.has(name))
+  return { enabled: groupOn || forced.length > 0, disabled: off, forced }
+}
 
 /**
  * One scope's skill sources, highest priority first.
@@ -93,6 +113,7 @@ export const resolveSources = (record, options) => {
 
   if (scope === 'session') {
     const state = states[SESSION_SOURCE_ID]
+    const switches = switchesOf(state, true)
     const defaultDir = join(options.sessionRoot, String(options.sessionId ?? ''), 'skills')
     const dir = typeof state?.dir === 'string' && state.dir !== '' ? resolve(state.dir) : defaultDir
     push({
@@ -104,9 +125,7 @@ export const resolveSources = (record, options) => {
       defaultDir,
       custom: dir !== defaultDir,
       hostScanned: false,
-      enabled: enabledOf(state, true),
-      disabled: disabledOf(state),
-      forced: forcedOf(state),
+      ...switches,
       exists: isDirectory(dir),
     })
   } else if (scope === 'project' || scope === 'global') {
@@ -126,9 +145,7 @@ export const resolveSources = (record, options) => {
         defaultDir,
         custom: dir !== defaultDir,
         hostScanned: spec.hostScanned === true && dir === defaultDir,
-        enabled: enabledOf(state, spec.enabled),
-        disabled: disabledOf(state),
-        forced: forcedOf(state),
+        ...switchesOf(state, spec.enabled),
         exists: isDirectory(dir),
       })
     }
@@ -145,9 +162,7 @@ export const resolveSources = (record, options) => {
       defaultDir: '',
       custom: true,
       hostScanned: false,
-      enabled: enabledOf(state, true),
-      disabled: disabledOf(state),
-      forced: forcedOf(state),
+      ...switchesOf(state, true),
       exists: isDirectory(key),
     })
   }

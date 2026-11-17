@@ -499,6 +499,10 @@ export function apply(ctx, config = {}) {
     storeStamp = stampOf()
     resetNote = undefined
     replan()
+    // 记录一变，这个作用域对外发布的候选就变了：模型侧与斜杠菜单都读注册表的缓存，
+    // 不在这里让它失效，刚才的开关要等下一次别的原因触发刷新才看得见。
+    refreshProviders()
+    ctx.emit('plugin-manager/changed', { reason: 'skill-mcp-manager/store' })
     return store
   }
 
@@ -571,11 +575,11 @@ export function apply(ctx, config = {}) {
 
   const sourcesOf = (target) => resolveSources(recordOf(currentStore(), target), sourceOptionsOf(target))
 
-  /** 这个来源此刻是不是整组开着：只有「整组关掉」的默认值才算关，单独开过的技能另外记。 */
-  const enabledOf = (store, key, target) => {
-    const found = resolveSources(recordOf(store, target), sourceOptionsOf(target)).find((source) => source.key === key)
-    if (found === undefined) throw new Error(`没有名为「${key}」的技能来源`)
-    return found.enabled
+  /** 「整组关着」时刻的默认值：没人动过这个来源时，看目录表规定的初始状态。 */
+  const catalogDefaultOf = (key) => {
+    const spec = catalogOf(key)
+    if (spec !== undefined) return spec.enabled === true
+    return key === SESSION_SOURCE_ID
   }
 
   const requireSource = (target, key) => {
@@ -660,11 +664,6 @@ export function apply(ctx, config = {}) {
     })),
   }))
 
-  /**
-   * The coming-turn switches of one session ride on top of the stored ones: a skill
-   * checked off in the composer joins every source's hidden list, and one checked on
-   * leaves it, which is exactly how a stored switch takes a skill away from the model.
-   */
   /**
    * The switches of the coming turn ride on top of the record.
    *
@@ -875,9 +874,9 @@ export function apply(ctx, config = {}) {
   // ── scope views
 
   /**
-   * One scope's sources with the skills on disk. `kept` names the source that keeps a
-   * disabled skill visible, which happens when the same name is enabled elsewhere in
-   * the scope; the registry resolves a name once per layer, not per source.
+   * One scope's sources with the skills on disk. A name is decided once per scope, by
+   * the nearest copy, so a skill switched off here stays off even when a further source
+   * still holds the same name.
    */
   const sourceRowsOf = (target) => {
     const sources = sourcesOf(target)
@@ -885,25 +884,12 @@ export function apply(ctx, config = {}) {
       ...source,
       skills: (source.exists ? safeList(source.dir) : []).map((skill) => ({
         ...skill,
-        // 来源整组关掉只是一个总开关：单独开启过的技能照样算开着
-        enabled: (source.enabled || source.forced.includes(skill.name)) && !source.disabled.includes(skill.name),
+        // 来源要么整组开着，要么守着其中几个；两种都按 disabled 名单判定
+        enabled: source.enabled && !source.disabled.includes(skill.name),
         forced: source.forced.includes(skill.name),
       })),
       error: source.exists ? '' : '目录不存在',
     }))
-    const enabledNames = new Set()
-    for (const row of rows) {
-      if (!row.enabled) continue
-      for (const skill of row.skills) if (skill.enabled && skill.valid) enabledNames.add(skill.name)
-    }
-    for (const row of rows) {
-      for (const skill of row.skills) {
-        if (skill.enabled) continue
-        const kept = rows.find((other) => other !== row && other.enabled && other.skills.some((candidate) => candidate.name === skill.name && candidate.enabled))
-        if (kept === undefined) continue
-        skill.kept = kept.label
-      }
-    }
     return rows
   }
 
@@ -980,8 +966,8 @@ export function apply(ctx, config = {}) {
         for (const skill of safeList(source.dir)) {
           if (!skill.valid || namedSeen.has(skill.name)) continue
           namedSeen.add(skill.name)
-          // 记录里的状态：整组关着时，单独叫起来过的技能照样算开着
-          const storedOn = (source.enabled || source.forced.includes(skill.name)) && !source.disabled.includes(skill.name)
+          // 记录里的状态：来源要么整组开着，要么开着其中几个；两种都按 disabled 名单判定
+          const storedOn = source.enabled && !source.disabled.includes(skill.name)
           const off = temp.offSkills.includes(skill.name)
           const forced = temp.onSkills.includes(skill.name)
           const enabled = (storedOn || forced) && off === false
@@ -1072,7 +1058,9 @@ export function apply(ctx, config = {}) {
     },
 
     refreshSkills() {
-      return { invalidated: refreshProviders() }
+      const invalidated = refreshProviders()
+      ctx.emit('plugin-manager/changed', { reason: 'skill-mcp-manager/refresh' })
+      return { invalidated }
     },
 
     skills(input) {
@@ -1114,6 +1102,7 @@ export function apply(ctx, config = {}) {
       })
       info(`wrote skill "${record.name}" to ${written.path}`)
       refreshProviders()
+      ctx.emit('plugin-manager/changed', { reason: 'skill-mcp-manager/store' })
       return runtime.view()
     },
 
@@ -1124,6 +1113,7 @@ export function apply(ctx, config = {}) {
       const removed = deleteSkillDoc(source.dir, skillName)
       info(`deleted skill "${skillName}" from ${removed.path}`)
       refreshProviders()
+      ctx.emit('plugin-manager/changed', { reason: 'skill-mcp-manager/store' })
       return runtime.view()
     },
 
@@ -1180,7 +1170,8 @@ export function apply(ctx, config = {}) {
       const next = editable()
       const record = ensureRecord(next, target)
       const state = { ...sourceStateOf(record, key) }
-      const groupOn = enabledOf(next, key, target)
+      // 记录里的 enabled 是「这个人最近怎么开过这个来源」，不受单独开关影响
+      const groupOn = state.enabled === true || (state.enabled === null && catalogDefaultOf(key))
       const disabled = new Set(state.disabled)
       const forced = new Set(Array.isArray(state.forced) ? state.forced : [])
       for (const name of names) {

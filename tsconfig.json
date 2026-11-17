@@ -19,6 +19,10 @@
     "src/index.ts",
     "src/endpoints.ts",
     "src/remote.ts",
-    "src/typert.ts"
+    "src/typert.ts",
+    "src/plan.ts",
+    "src/skills.ts",
+    "src/sources.ts",
+    "src/store.ts"
   ]
 }

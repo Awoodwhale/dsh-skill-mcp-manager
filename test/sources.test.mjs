@@ -109,8 +109,9 @@ assert.equal(sourceDirOf(catalogOf('claude'), { ...options, scope: 'project', pr
   // 整组关掉之后单独开起来的技能要一路带到界面与候选规划器
   const rows = resolveSources({ sources: { claude: { enabled: false, forced: ['pdf', 'docx'] } } }, { ...options, scope: 'global' })
   const claude = rows.find((row) => row.key === 'claude')
-  assert.equal(claude.enabled, false)
-  assert.deepEqual(claude.forced, ['pdf', 'docx'])
+  assert.equal(claude.enabled, true, '单独开了几个，这个来源就得对外开门，否则开了也用不上')
+  assert.deepEqual(claude.forced, ['pdf', 'docx'], '界面靠这一栏认出哪几个是单独开的')
+  assert.deepEqual(claude.disabled, [], '单独开起来的那几个就是开着的，不算在关着的名单里')
 }
 
 {
