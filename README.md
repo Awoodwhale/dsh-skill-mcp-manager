@@ -279,21 +279,6 @@ npm run typecheck
 
 `test/fixture/mcp-server.mjs` 是一个零依赖的 MCP stdio 服务，提供 `echo` 与 `add` 两个工具，用来手工走一遍完整链路：MCP 页添加服务器，选「本地进程」，命令 `node`，参数 `test/fixture/mcp-server.mjs`，保存后卡片上应该出现两个 `mcp__…` 工具名。
 
-## 发布
-
-推一条 GitHub Release 就会发一次 npm。工作流在 [.github/workflows/release.yml](.github/workflows/release.yml)：
-
-1. 改 `package.json` 的 `version`，在 `CHANGELOG.md` 里写一段，提交。
-2. `gh release create v<版本> --title v<版本> --notes "<那一段>"`。
-
-工作流会先校验 tag 与 `package.json` 的版本一致，再跑构建、生成物比对、类型检查与测试，升级 npm 之后才发布（Trusted Publishing 要求 npm CLI 11.5.1 以上，runner 上 Node 22 自带的是 10.x）。带连字符的预发布版本发到 `next`，其余发到 `latest`。版本号对不上或测试不过都会停在发布之前。
-
-也可以手工触发这条工作流，默认只跑构建与 `npm publish --dry-run`，把输入里的 `dry_run` 改成 `false` 才会真的发布。
-
-凭据来自 npm 的 Trusted Publisher：在 npm 上包的 Settings → Trusted Publishing 里填发行方 `Awoodwhale`、仓库 `dsh-skill-mcp-manager`、工作流文件名 `release.yml`，勾上 `Allow npm publish`，此后工作流用 OIDC 现场换发布凭据，仓库里不需要放任何 token。包必须先发布过一次才能绑定，所以第一个版本是手工 `npm publish` 出来的。
-
-Trusted Publisher 只有在发布成功一次之后才会从「Pending validation」变成已验证；在它验证之前，工作流的 OIDC 换不到发布权限，`npm publish` 会报 `E404`（不是权限错误，看起来像包不存在）。遇到这种情况先确认 npm 上那条连接的状态，再补一次手工发布把连接验证掉。
-
 ## 反馈
 
 遇到问题请带上：DSH 版本、插件版本（页头写着）、复现步骤，界面问题附截图。`~/.dsh/dsh-skill-mcp-manager/state.json` 里记录了当前加载的版本与产物路径，贴出来最快定位。
