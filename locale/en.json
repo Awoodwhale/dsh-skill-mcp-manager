@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "SKILL and MCP Manager",
+    "description": "Manage skills and MCP servers at global, project, and session scope: create, edit, and delete, add source directories, switch single items or whole groups, and override what one message carries.",
+    "detail": "docs/plugin-en.md"
+  }
+}

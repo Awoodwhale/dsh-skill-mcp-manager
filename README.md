@@ -8,7 +8,7 @@
 
 **让每一层工作范围自己决定：模型能看到哪些技能、哪些 MCP 工具**
 
-[更新日志](CHANGELOG.md) · [架构](docs/architecture.md) · [开发](docs/development.md) · [Apache-2.0](LICENSE)
+[English](README_EN.md) · [更新日志](CHANGELOG.md) · [架构](docs/architecture.md) · [开发](docs/development.md) · [Apache-2.0](LICENSE)
 
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![dsh](https://img.shields.io/badge/DSH-Web%20Plugin-0f766e.svg)](https://github.com/deepseek-ai/deepseek-harness)

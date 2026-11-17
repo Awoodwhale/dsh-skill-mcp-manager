@@ -40,6 +40,20 @@ window.__ModuleLoader__.load({
     const Tooltip = primitives.Tooltip
 
     const NS = 'skill-mcp-manager'
+    /** The locale namespace this plugin owns; nothing else registers under it. */
+    const LOCALE_NS = 'skillMcpManager'
+
+    /**
+     * Bumped whenever the language changes. Every page reads it into its state and
+     * redraws on the new number, so a switch in the language menu reaches this
+     * plugin's pages the same way it reaches the shipped ones.
+     */
+    let localeRevision = 0
+    const localeListeners: Set<() => void> = new Set()
+    const watchLocale = () => {
+      localeRevision += 1
+      for (const listener of localeListeners) listener()
+    }
 
     /**
      * Icons are looked up by name: a primitives build that drops one must cost that
@@ -73,30 +87,694 @@ window.__ModuleLoader__.load({
     const PANEL_MCP = 'skill-mcp-manager-mcp'
 
     /**
+     * Every string this plugin draws, in both languages. The key names the place
+     * it appears; a sentence that holds a number keeps the number inside the
+     * sentence, because Chinese and English order the count and the noun
+     * differently and a shared prefix cannot serve both.
+     */
+    const zh = {
+      'scope.global': '全局技能',
+      'scope.global.hint': '这台机器上每个会话都读到的技能',
+      'scope.project': '项目技能',
+      'scope.project.hint': '只在某一个项目里读到的技能',
+      'scope.session': '会话技能',
+      'scope.session.hint': '只在一条会话里读到的技能',
+      'scope.global.short': '全局',
+      'scope.project.short': '项目',
+      'scope.session.short': '会话',
+      'transport.stdio': '本地进程',
+      'transport.stdio.hint': '用一条命令启动服务器，两者通过标准输入输出通信',
+      'transport.http': 'HTTP',
+      'transport.http.hint': '连到已经在运行的服务器地址',
+      'state.all': '全部状态',
+      'state.enabled': '已启用',
+      'state.disabled': '已停用',
+      'state.broken': '解析异常',
+      'form.dir': '目录',
+      'form.dir.hint': '一个技能一个目录，可以在 SKILL.md 旁边放资源文件',
+      'form.file': '单文件',
+      'form.file.hint': '一个技能一个 .md 文件，写起来快，放不了附件',
+      'title.skills': 'SKILL管理',
+      'title.mcp': 'MCP管理',
+      'title.both': 'SKILL 与 MCP',
+      'sub.skills': '技能按存放它的 Agent 分组，来源与单个技能都可以随时停用。停用不会改动磁盘上的任何文件，只影响模型能不能看到。',
+      'sub.mcp': 'MCP 服务器按范围连接，最近的那个范围里同名服务器生效。这里改的连接只在保存后生效，工具以 mcp__名称__ 前缀出现在模型里。',
+      'head.entry': '入口',
+      'head.entry.title': '选择这个插件出现在哪些位置',
+      'head.refresh': '刷新',
+      'head.refreshing': '刷新中…',
+      'head.record': '记录文件',
+      'head.record.reset': '记录已重置',
+      'anchor.project': '项目',
+      'anchor.project.pick': '选择项目',
+      'anchor.project.none': '选择项目目录',
+      'anchor.project.other': '换一个项目',
+      'anchor.project.recent': '会话里出现过的项目',
+      'anchor.session': '会话',
+      'anchor.live': '{n} 条在线',
+      'anchor.unnamed': '未命名会话',
+      'anchor.session.filter': '按名称或目录筛选',
+      'anchor.session.filter.label': '筛选会话',
+      'anchor.this': '这一层',
+      'action.create': '新建技能',
+      'action.addSource': '添加目录',
+      'action.catalog': '核对模型视角',
+      'stats.skills': '个技能',
+      'stats.enabled': '个已启用',
+      'stats.disabled': '个已停用',
+      'stats.sources': '个来源在用',
+      'filter.source': '按来源筛选',
+      'filter.source.all': '全部来源',
+      'filter.source.option': '{label}（{n}）',
+      'filter.state': '按状态筛选',
+      'filter.query': '搜索技能名称或说明',
+      'filter.query.label': '搜索技能',
+      'empty.noProject': '还没有选中的项目',
+      'empty.noSession': '还没有已知的会话',
+      'empty.noProject.body': '选一个项目目录，就能看到它里面各个 Agent 的技能目录。',
+      'empty.noSession.body': '开一条会话之后，这里会列出它的技能目录。',
+      'empty.noSource': '这个范围还没有技能来源',
+      'empty.noMatch': '没有符合筛选条件的技能',
+      'empty.noSource.body': '添加一个目录，或者新建一个技能。',
+      'empty.noMatch.body': '换一个来源或状态再试。',
+      'source.tag.session': '会话目录',
+      'source.tag.custom': '自定义目录',
+      'source.tag.host': '内置读取',
+      'source.tag.off': '已停用',
+      'source.tag.forced': '单独开启 {n} 个',
+      'source.group.off': '整组停用',
+      'source.group.on': '整组启用',
+      'source.group.off.title': '把这一组技能全部停用',
+      'source.group.on.title': '把这一组技能全部启用',
+      'source.enable': '启用来源 {label}',
+      'source.enable.title': '启停这个来源里的全部技能',
+      'source.remove': '移除 {label}',
+      'source.fold': '收起 {label}',
+      'source.path.missing': '这个目录还不存在，换一个路径，或者先建好目录。',
+      'source.path.empty': '这个目录里还没有技能。',
+      'source.path.session': '这个目录会在第一次新建技能时创建。',
+      'skill.tag.file': '单文件',
+      'skill.tag.broken': '解析异常',
+      'skill.tag.forced': '单独开启',
+      'skill.tag.noModel': '不自动加载',
+      'skill.tag.noUser': '不接受 / 命令',
+      'skill.noDescription': '没有写说明',
+      'skill.enable': '启用技能 {name}',
+      'skill.edit': '编辑 {name}',
+      'skill.delete': '删除 {name}',
+      'server.tag.stdio': '本地进程',
+      'server.tag.http': 'HTTP',
+      'server.tag.dormant': '会话未激活',
+      'server.tools': '{n} 个工具',
+      'server.live.hint': '这条会话还没有活动，工具要等会话开始后才连上',
+      'server.edit': '编辑服务器 {name}',
+      'server.delete': '删除服务器 {name}',
+      'server.refresh': '刷新状态',
+      'server.add': '添加服务器',
+      'server.empty': '这个范围还没有 MCP 服务器',
+      'server.empty.body': '添加之后，它的工具会以 mcp__名称__ 前缀出现在这个范围的模型里。',
+      'zone.session': '这条会话',
+      'zone.session.hint': '只在这条会话里生效，比项目和全局都近',
+      'zone.project.hint': '同一个项目里的每条会话都会读到',
+      'zone.global': '全局',
+      'zone.global.hint': '所有项目和会话都会读到',
+      'zone.servers': '{n} 个服务器',
+      'zone.skills': '{n} 个技能',
+      'zone.empty.session': '这条会话还没有自己的技能',
+      'zone.empty.session.body': '新建技能会写进这条会话自己的目录，只有它读得到。',
+      'catalog.title': '模型现在能看到的技能',
+      'catalog.noAnchor': '这个范围还没有目标',
+      'catalog.sub': '这一份名单来自技能注册表本身，是模型决定加载技能时读到的目录。',
+      'catalog.loading': '正在读取…',
+      'catalog.empty': '这个范围里没有模型能看到的技能。',
+      'catalog.hidden': '另有 {n} 个名字被停用或被更近的范围挡在后面。',
+      'catalog.hidden.more': '另有 {n} 个名字被停用或被更近的范围挡在后面，模型读不到。',
+      'editor.create': '新建技能',
+      'editor.edit': '编辑 {name}',
+      'editor.create.sub': '写进所选来源的目录。保存之后，这条会话立刻能从目录里看到它。',
+      'editor.edit.sub': '改名字等于改目录名；正文与说明直接写进 SKILL.md。',
+      'editor.new': '新技能',
+      'editor.editing': '修改中',
+      'editor.cancel': '取消',
+      'editor.save': '保存',
+      'editor.saving': '保存中…',
+      'field.name': '名称',
+      'field.name.hint': '小写字母、数字和连字符，也是目录名',
+      'field.name.label': '技能名称',
+      'field.when': '什么时候用',
+      'field.when.hint': '可选，写给模型的触发条件',
+      'field.when.label': '触发条件',
+      'field.when.placeholder': '用户要求处理 PDF 时',
+      'field.description': '说明',
+      'field.description.count': '{n} 字',
+      'field.description.hint': '模型只靠这句话判断要不要加载这个技能，写清楚它能做什么。',
+      'field.description.label': '技能说明',
+      'field.description.placeholder': '把 PDF 逐页导成图片，并抽出其中的表格。',
+      'field.body': '正文',
+      'field.body.hint': '加载技能时读到的 Markdown，可以在目录里放资源文件再引用。',
+      'field.body.label': '技能正文',
+      'field.form': '存放形式',
+      'field.willWrite': '将写入',
+      'field.alsoInDir': '目录里还有',
+      'toggle.model': '允许模型自动加载',
+      'toggle.model.hint': '关掉后只在 / 命令里出现',
+      'toggle.user': '允许用户用 / 命令调用',
+      'toggle.user.title': '允许 / 命令调用',
+      'toggle.user.hint': '关掉后输入框里不出现它',
+      'points.saved': '保存之后，{anchor}的技能目录里立刻能读到它。',
+      'points.modelReads': '模型只读名称、说明和触发条件，正文在真正加载时才读。',
+      'points.hideOnly': '把技能停用只是把它藏起来，磁盘上的文件不会被改动。',
+      'serverEditor.create': '添加 MCP 服务器',
+      'serverEditor.sub': '连接成功后，工具会以 mcp__名称__ 前缀出现，模型按需调用。',
+      'serverEditor.scope': '写入范围 · {anchor}',
+      'field.serverName': '名称',
+      'field.serverName.hint': '随便起名，中文也行；重名会被更靠近的范围遮住',
+      'field.serverName.label': '服务器名称',
+      'field.transport': '连接方式',
+      'field.command': '命令',
+      'field.command.hint': '相对路径按工作目录解析。',
+      'field.command.label': '启动命令',
+      'field.url': '地址',
+      'field.url.hint': '已经跑起来的服务器，例如 http://127.0.0.1:8931/mcp',
+      'field.url.label': '服务器地址',
+      'field.args': '参数',
+      'field.args.count': '{n} 个',
+      'field.args.hint': '一行一个，直接交给进程，不经过 shell。',
+      'field.args.label': '命令参数',
+      'field.cwd': '工作目录',
+      'field.cwd.hint': '进程从这里启动，留空用宿主的工作目录',
+      'field.cwd.label': '工作目录',
+      'field.cwd.pick': '选择',
+      'field.env': '环境变量',
+      'field.env.hint': '逐条列出，会加到子进程的环境里。',
+      'field.header': '请求头',
+      'field.header.hint': '逐条列出，随每次请求发出。值里可以有等号。',
+      'field.pair.key': '第 {n} 条的键',
+      'field.pair.value': '第 {n} 条的值',
+      'field.pair.drop': '删除第 {n} 条',
+      'field.pair.drop.title': '删除这一条',
+      'field.pair.addEnv': '添加变量',
+      'field.pair.addHeader': '添加请求头',
+      'field.pair.noKey': '缺少键名：{value}',
+      'field.pair.duplicate': '重复的键：{key}',
+      'preview.mount': '挂载参数',
+      'points.toolPrefix': '工具名会带上 mcp__{name}__ 前缀。',
+      'points.scopeOnly': '只挂到{anchor}，别的范围看不到这些工具。',
+      'points.stdioLive': '保存后立刻启动进程，停用或删除时进程一起退出。',
+      'points.httpLive': '保存后立刻连上去，删掉就断开。',
+      'picker.project': '选择项目目录',
+      'picker.cwd': '选择工作目录',
+      'picker.source': '添加技能目录',
+      'picker.project.sub': '选中之后，这一页会扫描该项目里各个 Agent 的技能目录。',
+      'picker.source.sub': '选中之后，这个目录会被当作一个技能来源添加进来。',
+      'picker.use': '用这个目录',
+      'picker.scan': '扫描这个项目',
+      'picker.add': '添加这个目录',
+      'picker.up': '上一层',
+      'picker.empty': '这里没有子目录。',
+      'picker.noSession': '还没有选中会话',
+      'picker.editing': '正在编辑',
+      'picker.noKnown': '还没有已知的会话，先在首页开一条会话。',
+      'confirm.cancel': '取消',
+      'confirm.deleteSkill': '删除技能「{name}」？',
+      'confirm.deleteServer': '删除服务器「{name}」？',
+      'confirm.removeSource': '移除「{label}」这个来源？',
+      'confirm.dir.body': '整个目录 {path} 会被删除，目录里的资源文件也一起消失。',
+      'confirm.file.body': '文件 {path} 会被删除。',
+      'confirm.server.body': '这个范围的记录里会去掉它，正在运行的连接随之断开，记录文件里其它内容不变。',
+      'confirm.source.body': '只是不再从这个目录读技能，{dir} 里的文件不会被删除。',
+      'confirm.deleteServer.label': '删除服务器',
+      'confirm.deleteSkill.label': '删除技能',
+      'confirm.removeSource.label': '移除来源',
+      'note.deletedSkill': '已删除技能 {name}',
+      'note.deletedServer': '已删除服务器 {name}',
+      'note.removedSource': '已移除来源 {label}',
+      'note.saved': '已保存 {name}',
+      'note.refreshed': '已重新读取技能目录（{n} 个来源）',
+      'note.sourceToggle': '{label}：{state} {n} 个技能',
+      'note.sourceEnabled': '已启用',
+      'note.sourceDisabled': '已停用',
+      'note.sourceOn': '{label} 已启用',
+      'note.sourceOff': '{label} 已停用',
+      'note.sourceOn.busy': '启用 {label}…',
+      'note.addedDir': '已添加目录 {path}',
+      'note.skillOn': '启用 {name}',
+      'note.skillOff': '停用 {name}',
+      'note.placed': '已经把它加到这个位置',
+      'note.unplaced': '已经把这个入口收起来',
+      'note.reading': '正在读取 MCP 配置…',
+      'note.readingSkills': '正在读取技能配置…',
+      'note.noConfig': '宿主没有返回配置',
+      'note.readingSession': '正在读取这条会话…',
+      'note.noApi': '宿主的技能与 MCP 管理插件没有加载',
+      'note.noSessionId': '这条会话还没有标识',
+      'note.callFailed': '远程调用失败',
+      'notice.foldFailed': '收起入口失败',
+      'notice.prefsFailed': '读取显示位置失败，先不插入可选入口',
+      'notice.pluginRender': '插件设置面板渲染失败',
+      'notice.remoteMissing': '远程服务 skillMcpManager 没有挂上：宿主的 skill-mcp-manager 插件没有加载',
+      'places.title': '入口',
+      'places.sub': '这个插件的五个界面各自可以关掉。关掉之后省下的空间留给别的插件。',
+      'places.close': '关闭',
+      'places.sidebarSkills': '主页左边栏：SKILL',
+      'places.sidebarSkills.hint': '主页左边多一个图标，点开就是整页的 SKILL 管理',
+      'places.sidebarMcp': '主页左边栏：MCP',
+      'places.sidebarMcp.hint': '主页左边多一个图标，点开就是整页的 MCP 管理',
+      'places.tabSkills': '对话页顶部 tab：skill',
+      'places.tabSkills.hint': '每条对话的上方多一个 skill 页，管的就是这条会话',
+      'places.tabMcp': '对话页顶部 tab：mcp',
+      'places.tabMcp.hint': '每条对话的上方多一个 mcp 页，管的就是这条会话',
+      'settings.title': '显示位置',
+      'settings.note': '改完立刻生效。技能与 MCP 本身在设置里的 SKILL管理、MCP管理两页。',
+      'settings.loading': '正在读取设置…',
+      'composer.chip.hint': '这一次发送带上的 SKILL 与 MCP',
+      'composer.chip.changed': '这一次发送改动了 {n} 项',
+      'composer.title': '这一次发送带上什么',
+      'composer.sub': '这里的开关只管这一条会话，优先级高于项目与全局。回合结束就恢复原样。',
+      'composer.none': '这一次没有改动',
+      'composer.count': '这一次改动了 {n} 项',
+      'composer.reset': '全部恢复',
+      'composer.close': '关闭',
+      'composer.tabs.label': '带上什么',
+      'composer.tab.skill': '技能 {n}',
+      'composer.tab.server': 'MCP {n}',
+      'composer.empty.server': '这条会话还没有 MCP 服务器。去 mcp 页加一个。',
+      'composer.empty.skill': '这条会话还没有能带上的技能。',
+      'composer.group.all': '{label} 这一次全部带上',
+      'composer.group.drop': '这一次不带 {label} 的全部技能',
+      'composer.group.keep': '这一次带上 {label} 的全部技能',
+      'composer.tag.off': '这一次不带',
+      'composer.tag.on': '这一次带上',
+      'composer.row.label': '{name} 这一次是否带上',
+      'composer.other': '其它来源',
+      'composer.group.dropCount': '这一次不带 {n} 个',
+      'composer.group.stopped': '这个来源在记录里是停用的',
+      'composer.group.count': '{n} 个',
+      'composer.count.short': '{n}',
+      'name.empty': '技能名称不能为空',
+      'name.long': '技能名称不能超过 64 个字符',
+      'name.pattern': '只能用小写字母、数字和连字符，例如 pdf-tools',
+      'serverName.empty': '服务器名称不能为空',
+      'ago.now': '刚刚',
+      'ago.minutes': '{n} 分钟前',
+      'ago.hours': '{n} 小时前',
+      'ago.days': '{n} 天前',
+      'ago.months': '{n} 个月前',
+      'list.separator': '，',
+      'tabs.scope': '作用范围',
+      'source.expand': '展开 {label}',
+      'anchor.session.noMatch': '没有匹配「{query}」的会话。',
+      'action.where': '写进这条会话',
+      'action.where.title': '这条会话自己的目录，别的会话读不到',
+      'action.create.noSource': '这个范围还没有可写的技能目录',
+      'action.create.into': '写入 {label}',
+      'places.count': '开着 {open} / {total}',
+      'server.section': 'MCP 服务器',
+      'server.section.count': '{enabled} 个启用 / 共 {total} 个',
+      'server.empty.elsewhere': '{text}。切到那个范围可以改它，或者在这里为这个范围单独加一个。',
+      'server.elsewhere': '别的范围已经有：{parts}',
+      'server.elsewhere.part': '{scope} {n} 个',
+      'server.enable': '启用服务器 {name}',
+      'server.conflicts': '同名服务器在更靠近的范围里也有，最近的那个生效：{names}',
+      'note.sourceOff.busy': '停用 {label}…',
+      'editor.noDescription': '必须填写说明：模型只靠它决定要不要加载这个技能',
+      'serverEditor.problems': '请先改好这几行：{list}',
+      'serverEditor.noCommand': '本地进程需要一条启动命令',
+      'serverEditor.noUrl': 'HTTP 连接需要一个地址',
+      'serverEditor.taken': '这个范围里已经有一台叫 {name} 的服务器，换一个名字，或者先删掉那一台',
+      'note.renderFailed': '页面渲染失败：{message}',
+      'anchor.session.count': '{n} 条',
+      'field.body.placeholder': '## 步骤\n\n1. 用 pdfinfo 确认页数…',
+      'note.noMethod': '宿主没有提供 {method}：插件的宿主半边没有加载',
+      'note.timeout': '{method} 超过 {seconds} 秒没有返回，刷新页面或重启宿主后再试',
+      'label.skill': 'skill',
+      'label.mcp': 'mcp',
+    }
+
+    /** The English copy, key for key with the Chinese table above. */
+    const en = {
+      'scope.global': 'Global skills',
+      'scope.global.hint': 'Skills every session on this machine reads',
+      'scope.project': 'Project skills',
+      'scope.project.hint': 'Skills read inside one project only',
+      'scope.session': 'Session skills',
+      'scope.session.hint': 'Skills read inside one conversation only',
+      'scope.global.short': 'Global',
+      'scope.project.short': 'Project',
+      'scope.session.short': 'Session',
+      'transport.stdio': 'Local process',
+      'transport.stdio.hint': 'Start the server with a command and talk to it over stdin and stdout',
+      'transport.http': 'HTTP',
+      'transport.http.hint': 'Connect to a server address already running',
+      'state.all': 'Any status',
+      'state.enabled': 'Enabled',
+      'state.disabled': 'Disabled',
+      'state.broken': 'Unreadable',
+      'form.dir': 'Directory',
+      'form.dir.hint': 'One directory per skill, with resource files beside SKILL.md',
+      'form.file': 'Single file',
+      'form.file.hint': 'One .md file per skill: quick to write, no room for attachments',
+      'title.skills': 'SKILL manager',
+      'title.mcp': 'MCP manager',
+      'title.both': 'SKILL and MCP',
+      'sub.skills': 'Skills are grouped by the Agent that holds them, and a source or a single skill can be turned off at any time. Switching off touches no file on disk; it only decides whether the model can see the skill.',
+      'sub.mcp': 'MCP servers connect per scope, and the nearest scope wins for a given name. A change here takes effect once saved, and the tools reach the model under the mcp__name__ prefix.',
+      'head.entry': 'Places',
+      'head.entry.title': 'Choose where this plugin appears',
+      'head.refresh': 'Refresh',
+      'head.refreshing': 'Refreshing…',
+      'head.record': 'Record file',
+      'head.record.reset': 'The record was reset',
+      'anchor.project': 'Project',
+      'anchor.project.pick': 'Choose a project',
+      'anchor.project.none': 'Choose a project directory',
+      'anchor.project.other': 'Switch project',
+      'anchor.project.recent': 'Projects seen in conversations',
+      'anchor.session': 'Session',
+      'anchor.live': '{n} online',
+      'anchor.unnamed': 'Unnamed session',
+      'anchor.session.filter': 'Filter by name or directory',
+      'anchor.session.filter.label': 'Filter sessions',
+      'anchor.this': 'this layer',
+      'action.create': 'New skill',
+      'action.addSource': 'Add directory',
+      'action.catalog': 'Check the model view',
+      'stats.skills': 'skills',
+      'stats.enabled': 'enabled',
+      'stats.disabled': 'disabled',
+      'stats.sources': 'sources in use',
+      'filter.source': 'Filter by source',
+      'filter.source.all': 'Any source',
+      'filter.source.option': '{label} ({n})',
+      'filter.state': 'Filter by status',
+      'filter.query': 'Search skill names and descriptions',
+      'filter.query.label': 'Search skills',
+      'empty.noProject': 'No project chosen yet',
+      'empty.noSession': 'No known sessions yet',
+      'empty.noProject.body': 'Pick a project directory to see the skill directories of every Agent inside it.',
+      'empty.noSession.body': 'Once a conversation exists, its skill directories are listed here.',
+      'empty.noSource': 'No skill source in this scope yet',
+      'empty.noMatch': 'No skill matches these filters',
+      'empty.noSource.body': 'Add a directory, or create a skill.',
+      'empty.noMatch.body': 'Try another source or status.',
+      'source.tag.session': 'Session directory',
+      'source.tag.custom': 'Custom directory',
+      'source.tag.host': 'Read by the host',
+      'source.tag.off': 'Disabled',
+      'source.tag.forced': '{n} switched on',
+      'source.group.off': 'Disable all',
+      'source.group.on': 'Enable all',
+      'source.group.off.title': 'Turn off every skill in this group',
+      'source.group.on.title': 'Turn on every skill in this group',
+      'source.enable': 'Enable source {label}',
+      'source.enable.title': 'Turn every skill in this source on or off',
+      'source.remove': 'Remove {label}',
+      'source.fold': 'Collapse {label}',
+      'source.path.missing': 'This directory does not exist yet. Pick another path, or create it first.',
+      'source.path.empty': 'No skill in this directory yet.',
+      'source.path.session': 'This directory is created when the first skill is written.',
+      'skill.tag.file': 'Single file',
+      'skill.tag.broken': 'Unreadable',
+      'skill.tag.forced': 'Switched on',
+      'skill.tag.noModel': 'No auto load',
+      'skill.tag.noUser': 'No / command',
+      'skill.noDescription': 'No description',
+      'skill.enable': 'Enable skill {name}',
+      'skill.edit': 'Edit {name}',
+      'skill.delete': 'Delete {name}',
+      'server.tag.stdio': 'Local process',
+      'server.tag.http': 'HTTP',
+      'server.tag.dormant': 'Session not started',
+      'server.tools': '{n} tools',
+      'server.live.hint': 'This conversation has not started yet, so the tools connect once it does',
+      'server.edit': 'Edit server {name}',
+      'server.delete': 'Delete server {name}',
+      'server.refresh': 'Refresh status',
+      'server.add': 'Add server',
+      'server.empty': 'No MCP server in this scope',
+      'server.empty.body': 'Once added, its tools reach the model of this scope under the mcp__name__ prefix.',
+      'zone.session': 'This conversation',
+      'zone.session.hint': 'Applies to this conversation only, nearer than project and global',
+      'zone.project.hint': 'Every conversation inside the same project reads it',
+      'zone.global': 'Global',
+      'zone.global.hint': 'Every project and every conversation reads it',
+      'zone.servers': '{n} servers',
+      'zone.skills': '{n} skills',
+      'zone.skills.one': '{n} skill',
+      'zone.empty.session': 'This conversation has no skills of its own',
+      'zone.empty.session.body': 'A new skill is written into the conversation’s own directory, where only it reads.',
+      'catalog.title': 'Skills the model can see now',
+      'catalog.noAnchor': 'This scope has no target yet',
+      'catalog.sub': 'This list comes from the skill registry itself: the catalogue the model reads when it decides to load a skill.',
+      'catalog.loading': 'Reading…',
+      'catalog.empty': 'No skill in this scope is visible to the model.',
+      'catalog.hidden': '{n} more names are switched off or shadowed by a nearer scope.',
+      'catalog.hidden.more': '{n} more names are switched off or shadowed by a nearer scope, so the model cannot read them.',
+      'editor.create': 'New skill',
+      'editor.edit': 'Edit {name}',
+      'editor.create.sub': 'Written into the chosen source. Once saved, this conversation sees it in the directory right away.',
+      'editor.edit.sub': 'Renaming renames the directory; the description and the body go straight into SKILL.md.',
+      'editor.new': 'New skill',
+      'editor.editing': 'Editing',
+      'editor.cancel': 'Cancel',
+      'editor.save': 'Save',
+      'editor.saving': 'Saving…',
+      'field.name': 'Name',
+      'field.name.hint': 'Lower-case letters, digits, and hyphens; also the directory name',
+      'field.name.label': 'Skill name',
+      'field.when': 'When to use',
+      'field.when.hint': 'Optional trigger condition written for the model',
+      'field.when.label': 'Trigger condition',
+      'field.when.placeholder': 'When the user asks to work with a PDF',
+      'field.description': 'Description',
+      'field.description.count': '{n} chars',
+      'field.description.hint': 'This sentence is all the model has to decide whether to load the skill, so say what it does.',
+      'field.description.label': 'Skill description',
+      'field.description.placeholder': 'Render every PDF page to an image and pull the tables out.',
+      'field.body': 'Body',
+      'field.body.hint': 'The Markdown read when the skill loads; resource files can sit in the directory and be referenced.',
+      'field.body.label': 'Skill body',
+      'field.form': 'Layout',
+      'field.willWrite': 'Will write',
+      'field.alsoInDir': 'Also in the directory',
+      'toggle.model': 'Let the model load it on its own',
+      'toggle.model.hint': 'Once off, it only appears under the / command',
+      'toggle.user': 'Let people call it with a / command',
+      'toggle.user.title': 'Allow the / command',
+      'toggle.user.hint': 'Once off, it does not appear in the composer',
+      'points.saved': 'Once saved, the skill directory of {anchor} reads it right away.',
+      'points.modelReads': 'The model reads the name, the description, and the trigger; the body is read only when the skill loads.',
+      'points.hideOnly': 'Switching a skill off only hides it; no file on disk changes.',
+      'serverEditor.create': 'Add an MCP server',
+      'serverEditor.sub': 'Once connected, its tools appear under the mcp__name__ prefix and the model calls them as needed.',
+      'serverEditor.scope': 'Writes to · {anchor}',
+      'field.serverName': 'Name',
+      'field.serverName.hint': 'Any name works, Chinese included; a duplicate is shadowed by the nearer scope',
+      'field.serverName.label': 'Server name',
+      'field.transport': 'Transport',
+      'field.command': 'Command',
+      'field.command.hint': 'A relative path resolves against the working directory.',
+      'field.command.label': 'Start command',
+      'field.url': 'Address',
+      'field.url.hint': 'A server already running, such as http://127.0.0.1:8931/mcp',
+      'field.url.label': 'Server address',
+      'field.args': 'Arguments',
+      'field.args.count': '{n}',
+      'field.args.hint': 'One per line, handed to the process directly without a shell.',
+      'field.args.label': 'Command arguments',
+      'field.cwd': 'Working directory',
+      'field.cwd.hint': 'The process starts here; leave it empty to use the host working directory',
+      'field.cwd.label': 'Working directory',
+      'field.cwd.pick': 'Choose',
+      'field.env': 'Environment',
+      'field.env.hint': 'Listed one by one, added to the child process environment.',
+      'field.header': 'Request headers',
+      'field.header.hint': 'Listed one by one, sent with every request. A value may contain an equals sign.',
+      'field.pair.key': 'Key of row {n}',
+      'field.pair.value': 'Value of row {n}',
+      'field.pair.drop': 'Delete row {n}',
+      'field.pair.drop.title': 'Delete this row',
+      'field.pair.addEnv': 'Add variable',
+      'field.pair.addHeader': 'Add header',
+      'field.pair.noKey': 'Missing a key: {value}',
+      'field.pair.duplicate': 'Duplicate key: {key}',
+      'preview.mount': 'Mount arguments',
+      'points.toolPrefix': 'Tool names carry the mcp__{name}__ prefix.',
+      'points.scopeOnly': 'Mounted on {anchor} only; no other scope sees these tools.',
+      'points.stdioLive': 'Saving starts the process; disabling or deleting stops it.',
+      'points.httpLive': 'Saving connects right away; deleting disconnects.',
+      'picker.project': 'Choose a project directory',
+      'picker.cwd': 'Choose a working directory',
+      'picker.source': 'Add a skill directory',
+      'picker.project.sub': 'Once chosen, this page scans the skill directories of every Agent in that project.',
+      'picker.source.sub': 'Once chosen, this directory is added as a skill source.',
+      'picker.use': 'Use this directory',
+      'picker.scan': 'Scan this project',
+      'picker.add': 'Add this directory',
+      'picker.up': 'Parent',
+      'picker.empty': 'No subdirectory here.',
+      'picker.noSession': 'No session chosen yet',
+      'picker.editing': 'Editing',
+      'picker.noKnown': 'No known session yet; open one from the home page first.',
+      'confirm.cancel': 'Cancel',
+      'confirm.deleteSkill': 'Delete the skill “{name}”?',
+      'confirm.deleteServer': 'Delete the server “{name}”?',
+      'confirm.removeSource': 'Remove the source “{label}”?',
+      'confirm.dir.body': 'The whole directory {path} is deleted, together with the resource files inside it.',
+      'confirm.file.body': 'The file {path} is deleted.',
+      'confirm.server.body': 'It is dropped from the record of this scope and the running connection closes with it; the rest of the record file stays as it is.',
+      'confirm.source.body': 'Skills simply stop being read from this directory; the files in {dir} are not deleted.',
+      'confirm.deleteServer.label': 'Delete server',
+      'confirm.deleteSkill.label': 'Delete skill',
+      'confirm.removeSource.label': 'Remove source',
+      'note.deletedSkill': 'Deleted the skill {name}',
+      'note.deletedServer': 'Deleted the server {name}',
+      'note.removedSource': 'Removed the source {label}',
+      'note.saved': 'Saved {name}',
+      'note.refreshed': 'Re-read the skill directories ({n} sources)',
+      'note.sourceToggle': '{label}: {state} {n} skills',
+      'note.sourceToggle.one': '{label}: {state} {n} skill',
+      'note.sourceEnabled': 'enabled',
+      'note.sourceDisabled': 'disabled',
+      'note.sourceOn': '{label} is now enabled',
+      'note.sourceOff': '{label} is now disabled',
+      'note.sourceOn.busy': 'Enabling {label}…',
+      'note.addedDir': 'Added the directory {path}',
+      'note.skillOn': 'Enabled {name}',
+      'note.skillOff': 'Disabled {name}',
+      'note.placed': 'Added to this place',
+      'note.unplaced': 'Removed from this place',
+      'note.reading': 'Reading the MCP configuration…',
+      'note.readingSkills': 'Reading the skill configuration…',
+      'note.noConfig': 'The host returned no configuration',
+      'note.readingSession': 'Reading this conversation…',
+      'note.noApi': 'The host skill and MCP manager plugin is not loaded',
+      'note.noSessionId': 'This conversation has no id yet',
+      'note.callFailed': 'The remote call failed',
+      'notice.foldFailed': 'Could not remove an entry',
+      'notice.prefsFailed': 'Could not read where the entries go, so the optional ones stay out',
+      'notice.pluginRender': 'The plugin settings panel failed to render',
+      'notice.remoteMissing': 'The skillMcpManager remote is missing: the host skill-mcp-manager plugin is not loaded',
+      'places.title': 'Places',
+      'places.sub': 'Each of this plugin’s five surfaces can be turned off, leaving the room to another plugin.',
+      'places.close': 'Close',
+      'places.sidebarSkills': 'Home sidebar: SKILL',
+      'places.sidebarSkills.hint': 'One more icon in the home sidebar, opening the whole SKILL manager',
+      'places.sidebarMcp': 'Home sidebar: MCP',
+      'places.sidebarMcp.hint': 'One more icon in the home sidebar, opening the whole MCP manager',
+      'places.tabSkills': 'Conversation tab: skill',
+      'places.tabSkills.hint': 'One more tab above every conversation, managing that conversation',
+      'places.tabMcp': 'Conversation tab: mcp',
+      'places.tabMcp.hint': 'One more tab above every conversation, managing that conversation',
+      'settings.title': 'Where it appears',
+      'settings.note': 'Changes apply at once. Skills and MCP servers themselves live on the SKILL manager and MCP manager pages in settings.',
+      'settings.loading': 'Reading the settings…',
+      'composer.chip.hint': 'What this message carries, SKILL and MCP',
+      'composer.chip.changed': 'This message changes {n} items',
+      'composer.title': 'What this message carries',
+      'composer.sub': 'These switches cover this conversation only and sit nearer than project and global. The turn ends, and everything reverts.',
+      'composer.none': 'Nothing changed for this message',
+      'composer.count': 'Changed {n} items for this message',
+      'composer.count.one': 'Changed {n} item for this message',
+      'composer.reset': 'Restore all',
+      'composer.close': 'Close',
+      'composer.tabs.label': 'What this message carries',
+      'composer.tab.skill': 'Skills {n}',
+      'composer.tab.server': 'MCP {n}',
+      'composer.empty.server': 'This conversation has no MCP server yet. Add one on the mcp page.',
+      'composer.empty.skill': 'This conversation has no skill to carry yet.',
+      'composer.group.all': 'Carry all of {label} this time',
+      'composer.group.drop': 'Drop every skill of {label} this time',
+      'composer.group.keep': 'Carry every skill of {label} this time',
+      'composer.tag.off': 'Dropped this time',
+      'composer.tag.on': 'Added this time',
+      'composer.row.label': 'Whether {name} is carried this time',
+      'composer.other': 'Other sources',
+      'composer.group.dropCount': '{n} dropped this time',
+      'composer.group.dropCount.one': '{n} dropped this time',
+      'composer.group.stopped': 'This source is disabled in the record',
+      'composer.group.count': '{n}',
+      'composer.count.short': '{n}',
+      'name.empty': 'A skill name is required',
+      'name.long': 'A skill name cannot be longer than 64 characters',
+      'name.pattern': 'Use lower-case letters, digits, and hyphens, such as pdf-tools',
+      'serverName.empty': 'A server name is required',
+      'ago.now': 'just now',
+      'ago.minutes': '{n} minutes ago',
+      'ago.hours': '{n} hours ago',
+      'ago.days': '{n} days ago',
+      'ago.months': '{n} months ago',
+      'list.separator': ', ',
+      'tabs.scope': 'Scope',
+      'source.expand': 'Expand {label}',
+      'anchor.session.noMatch': 'No conversation matches “{query}”.',
+      'action.where': 'Writes into this conversation',
+      'action.where.title': 'This conversation’s own directory, which no other conversation reads',
+      'action.create.noSource': 'This scope has no writable skill directory',
+      'action.create.into': 'Writes to {label}',
+      'places.count': '{open} of {total} on',
+      'server.section': 'MCP servers',
+      'server.section.count': '{enabled} enabled / {total} total',
+      'server.empty.elsewhere': '{text}. Switch to that scope to change it, or add one for this scope here.',
+      'server.elsewhere': 'Other scopes already have: {parts}',
+      'server.elsewhere.part': '{scope} {n}',
+      'server.enable': 'Enable server {name}',
+      'server.conflicts': 'A server of the same name also sits in a nearer scope, and the nearest one wins: {names}',
+      'note.sourceOff.busy': 'Disabling {label}…',
+      'editor.noDescription': 'A description is required: it is all the model has to decide whether to load the skill',
+      'serverEditor.problems': 'Fix these rows first: {list}',
+      'serverEditor.noCommand': 'A local process needs a start command',
+      'serverEditor.noUrl': 'An HTTP connection needs an address',
+      'serverEditor.taken': 'This scope already has a server named {name}; pick another name, or delete that one first',
+      'note.renderFailed': 'The page failed to render: {message}',
+      'anchor.session.count': '{n}',
+      'field.body.placeholder': '## Steps\n\n1. Check the page count with pdfinfo…',
+      'note.noMethod': 'The host does not expose {method}: the host half of this plugin is not loaded',
+      'note.timeout': '{method} did not answer within {seconds} seconds; refresh the page or restart the host',
+      'label.skill': 'skill',
+      'label.mcp': 'mcp',
+    }
+
+    /**
+     * The translator the pages read. `apply` replaces it with the locale service
+     * binding; before that it answers from the Chinese table, so a render that
+     * somehow precedes activation still reads. A language that spells the singular
+     * differently adds `<key>.one`, and the lookup prefers it when `n` is exactly
+     * one; Chinese leaves that entry out and every count reads the same.
+     */
+    let table = zh
+    const oneOf = (key, params) => (params !== undefined && params.n === 1 && `${key}.one` in table ? `${key}.one` : key)
+    let t = (key, params = undefined) => {
+      const template = table[oneOf(key, params)] ?? zh[key] ?? key
+      if (params === undefined) return template
+      return template.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match))
+    }
+
+    /**
      * The shell keeps one hook the pages use to redraw the sidebar entries and the
      * conversation tabs after the switches in the page change.
      */
     let syncShell = (prefs) => {}
 
     const SCOPES = [
-      { value: 'global', label: '全局技能', hint: '这台机器上每个会话都读到的技能' },
-      { value: 'project', label: '项目技能', hint: '只在某一个项目里读到的技能' },
-      { value: 'session', label: '会话技能', hint: '只在一条会话里读到的技能' },
+      { value: 'global', key: 'scope.global', hintKey: 'scope.global.hint' },
+      { value: 'project', key: 'scope.project', hintKey: 'scope.project.hint' },
+      { value: 'session', key: 'scope.session', hintKey: 'scope.session.hint' },
     ]
-    const SCOPE_LABEL = { global: '全局', project: '项目', session: '会话' }
+    const SCOPE_LABEL_KEY = { global: 'scope.global.short', project: 'scope.project.short', session: 'scope.session.short' }
     const TRANSPORTS = [
-      { value: 'stdio', label: '本地进程', hint: '用一条命令启动服务器，两者通过标准输入输出通信' },
-      { value: 'streamable-http', label: 'HTTP', hint: '连到已经在运行的服务器地址' },
+      { value: 'stdio', key: 'transport.stdio', hintKey: 'transport.stdio.hint' },
+      { value: 'streamable-http', key: 'transport.http', hintKey: 'transport.http.hint' },
     ]
     const STATE_FILTERS = [
-      { value: 'all', label: '全部状态' },
-      { value: 'enabled', label: '已启用' },
-      { value: 'disabled', label: '已停用' },
-      { value: 'broken', label: '解析异常' },
+      { value: 'all', key: 'state.all' },
+      { value: 'enabled', key: 'state.enabled' },
+      { value: 'disabled', key: 'state.disabled' },
+      { value: 'broken', key: 'state.broken' },
     ]
     const FORMS = [
-      { value: 'dir', label: '目录', hint: '一个技能一个目录，可以在 SKILL.md 旁边放资源文件' },
-      { value: 'file', label: '单文件', hint: '一个技能一个 .md 文件，写起来快，放不了附件' },
+      { value: 'dir', key: 'form.dir', hintKey: 'form.dir.hint' },
+      { value: 'file', key: 'form.file', hintKey: 'form.file.hint' },
     ]
 
     /**
@@ -168,13 +846,13 @@ window.__ModuleLoader__.load({
     const agoOf = (at) => {
       if (typeof at !== 'number' || at <= 0) return ''
       const minutes = Math.floor((Date.now() - at) / 60000)
-      if (minutes < 1) return '刚刚'
-      if (minutes < 60) return `${minutes} 分钟前`
+      if (minutes < 1) return t('ago.now')
+      if (minutes < 60) return t('ago.minutes', { n: minutes })
       const hours = Math.floor(minutes / 60)
-      if (hours < 24) return `${hours} 小时前`
+      if (hours < 24) return t('ago.hours', { n: hours })
       const days = Math.floor(hours / 24)
-      if (days < 30) return `${days} 天前`
-      return `${Math.floor(days / 30)} 个月前`
+      if (days < 30) return t('ago.days', { n: days })
+      return t('ago.months', { n: Math.floor(days / 30) })
     }
     // ── styles ──────────────────────────────────────────────────────────────
 
@@ -596,7 +1274,7 @@ window.__ModuleLoader__.load({
     const Segmented = ({ id, value, options, onChange, label }) => h(SegmentedControl, {
       id: id ?? 'acap-segmented',
       value,
-      options: options.map((option) => ({ value: option.value, label: option.label, title: option.hint })),
+      options: options.map((option) => ({ value: option.value, label: t(option.key), title: t(option.hintKey) })),
       onChange,
       label,
     })
@@ -635,8 +1313,8 @@ window.__ModuleLoader__.load({
           key: 'c',
           type: 'button',
           className: 'acap-icon-btn',
-          'aria-label': '关闭',
-          title: '关闭',
+          'aria-label': t('composer.close'),
+          title: t('composer.close'),
           onClick: onClose,
         }, icon(IconClose, { size: 14 })),
       ]),
@@ -657,10 +1335,10 @@ window.__ModuleLoader__.load({
         const key = String(row?.key ?? '').trim()
         const value = String(row?.value ?? '')
         if (key === '') {
-          if (value.trim() !== '') problems.push(`缺少键名：${value.trim().slice(0, 24)}`)
+          if (value.trim() !== '') problems.push(t('field.pair.noKey', { value: value.trim().slice(0, 24) }))
           continue
         }
-        if (Object.prototype.hasOwnProperty.call(pairs, key)) problems.push(`重复的键：${key}`)
+        if (Object.prototype.hasOwnProperty.call(pairs, key)) problems.push(t('field.pair.duplicate', { key }))
         pairs[key] = value
       }
       return { pairs, problems }
@@ -676,13 +1354,13 @@ window.__ModuleLoader__.load({
     const NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u
     const nameProblem = (name) => {
       const text = String(name ?? '').trim()
-      if (text === '') return '技能名称不能为空'
-      if (text.length > 64) return '技能名称不能超过 64 个字符'
-      if (!NAME_PATTERN.test(text)) return '只能用小写字母、数字和连字符，例如 pdf-tools'
+      if (text === '') return t('name.empty')
+      if (text.length > 64) return t('name.long')
+      if (!NAME_PATTERN.test(text)) return t('name.pattern')
       return ''
     }
     const SERVER_NAME = /^[A-Za-z0-9_-]{1,32}$/u
-    const serverNameProblem = (name) => (String(name ?? '').trim() === '' ? '服务器名称不能为空' : '')
+    const serverNameProblem = (name) => (String(name ?? '').trim() === '' ? t('serverName.empty') : '')
     /** Same derivation as the host: a person names a server freely, the mount grammar is ASCII. */
     const hashHex = (text) => {
       let hash = 0x811c9dc5
@@ -842,6 +1520,7 @@ window.__ModuleLoader__.load({
           collapsed: {},
           zoneOpen: {},
           composer: undefined,
+          localeRev: localeRevision,
         }
         this.pollTimer = undefined
         this.mcpSeq = 0
@@ -849,11 +1528,14 @@ window.__ModuleLoader__.load({
 
       componentDidMount() {
         this.mounted = true
+        this.watch = () => this.patch({ localeRev: localeRevision })
+        localeListeners.add(this.watch)
         void this.load()
       }
 
       componentWillUnmount() {
         this.mounted = false
+        localeListeners.delete(this.watch)
         if (this.pollTimer !== undefined) clearTimeout(this.pollTimer)
         this.pollTimer = undefined
       }
@@ -875,11 +1557,11 @@ window.__ModuleLoader__.load({
       async call(method, input = undefined) {
         const api = this.api
         if (api === undefined || typeof api[method] !== 'function') {
-          return { error: `宿主没有提供 ${method}：插件的宿主半边没有加载` }
+          return { error: t('note.noMethod', { method }) }
         }
         let timer
         const deadline = new Promise((_, reject) => {
-          timer = setTimeout(() => reject(new Error(`${method} 超过 ${CALL_TIMEOUT_MS / 1000} 秒没有返回，刷新页面或重启宿主后再试`)), CALL_TIMEOUT_MS)
+          timer = setTimeout(() => reject(new Error(t('note.timeout', { method, seconds: CALL_TIMEOUT_MS / 1000 }))), CALL_TIMEOUT_MS)
         })
         try {
           const pending = input === undefined ? api[method]() : api[method](input)
@@ -994,10 +1676,10 @@ window.__ModuleLoader__.load({
        */
       anchorText() {
         const anchor = this.anchor()
-        if (anchor === undefined) return '这一层'
-        if (anchor.scope === 'global') return '全局'
-        if (anchor.scope === 'project') return `项目 ${lastSegment(anchor.root)}`
-        return '这条会话'
+        if (anchor === undefined) return t('anchor.this')
+        if (anchor.scope === 'global') return t('scope.global.short')
+        if (anchor.scope === 'project') return `${t('scope.project.short')} ${lastSegment(anchor.root)}`
+        return t('zone.session')
       }
 
       /** The anchor this page is editing, or undefined when the scope has no target yet. */
@@ -1054,29 +1736,29 @@ window.__ModuleLoader__.load({
 
       async toggleSource(source, enabled, at) {
         const key = source.key
-        this.say(`${enabled ? '启用' : '停用'} ${source.label}…`, 'ok')
+        this.say(enabled ? t('note.sourceOn.busy', { label: source.label }) : t('note.sourceOff.busy', { label: source.label }), 'ok')
         const { error } = await this.run('saveSource', { ...this.scopeArgsOf(at), source: key, enabled })
         if (error !== '') this.say(error, 'error')
-        else this.say(`${source.label} 已${enabled ? '启用' : '停用'}`)
+        else this.say(enabled ? t('note.sourceOn', { label: source.label }) : t('note.sourceOff', { label: source.label }))
       }
 
       async toggleSkill(source, skill, enabled, at) {
         const { error } = await this.run('toggleSkills', { ...this.scopeArgsOf(at), source: source.key, names: [skill.name], enabled })
         if (error !== '') this.say(error, 'error')
-        else this.say(`${enabled ? '启用' : '停用'} ${skill.name}`)
+        else this.say(enabled ? t('note.skillOn', { name: skill.name }) : t('note.skillOff', { name: skill.name }))
       }
 
       async removeSource(source, at) {
         this.setState({
           confirm: {
-            title: `移除「${source.label}」这个来源？`,
-            body: `只是不再从这个目录读技能，${source.dir} 里的文件不会被删除。`,
-            confirmLabel: '移除来源',
+            title: t('confirm.removeSource', { label: source.label }),
+            body: t('confirm.source.body', { dir: source.dir }),
+            confirmLabel: t('confirm.removeSource.label'),
             run: async () => {
               const { error } = await this.run('removeSource', { ...this.scopeArgsOf(at), source: source.key })
               if (error !== '') throw new Error(error)
               this.setState({ confirm: undefined, sourceFilter: 'all' })
-              this.say(`已移除来源 ${source.label}`)
+              this.say(t('note.removedSource', { label: source.label }))
             },
           },
         })
@@ -1098,7 +1780,7 @@ window.__ModuleLoader__.load({
         const servers = (entry?.servers ?? []).map((row) => ({ ...row }))
         if (index === -1) servers.push(server)
         else servers[index] = server
-        this.onChange({ serverEditor: { ...this.state.serverEditor, busy: '保存中…', error: '' } })
+        this.onChange({ serverEditor: { ...this.state.serverEditor, busy: t('editor.saving'), error: '' } })
         const result = await this.call('saveServers', { ...this.scopeArgsOf(at), mcpServers: servers })
         const failure = errorOf(result)
         if (failure !== '') {
@@ -1106,7 +1788,7 @@ window.__ModuleLoader__.load({
           return
         }
         this.onChange({ view: result, serverEditor: undefined, ...this.selectionOf(result) })
-        this.say(`已保存 ${server.name}`)
+        this.say(t('note.saved', { name: server.name }))
         void this.refreshMcp()
       }
 
@@ -1116,22 +1798,22 @@ window.__ModuleLoader__.load({
         servers[index] = { ...servers[index], enabled: server.enabled !== true }
         const { error } = await this.run('saveServers', { ...this.scopeArgsOf(at), mcpServers: servers })
         if (error !== '') this.say(error, 'error')
-        else this.say(`${servers[index].enabled ? '启用' : '停用'} ${server.name}`)
+        else this.say(servers[index].enabled ? t('note.skillOn', { name: server.name }) : t('note.skillOff', { name: server.name }))
       }
 
       async removeServer(index, server, at) {
         this.setState({
           confirm: {
-            title: `删除服务器「${server.name}」？`,
-            body: '这个范围的记录里会去掉它，正在运行的连接随之断开，记录文件里其它内容不变。',
-            confirmLabel: '删除服务器',
+            title: t('confirm.deleteServer', { name: server.name }),
+            body: t('confirm.server.body'),
+            confirmLabel: t('confirm.deleteServer.label'),
             run: async () => {
               const entry = this.entryOf(at)
               const servers = (entry?.servers ?? []).filter((_row, position) => position !== index)
               const { error } = await this.run('saveServers', { ...this.scopeArgsOf(at), mcpServers: servers })
               if (error !== '') throw new Error(error)
               this.setState({ confirm: undefined })
-              this.say(`已删除服务器 ${server.name}`)
+              this.say(t('note.deletedServer', { name: server.name }))
             },
           },
         })
@@ -1144,10 +1826,10 @@ window.__ModuleLoader__.load({
           return
         }
         if (String(editor.description ?? '').trim() === '') {
-          this.onChange({ skillEditor: { ...editor, error: '必须填写说明：模型只靠它决定要不要加载这个技能' } })
+          this.onChange({ skillEditor: { ...editor, error: t('editor.noDescription') } })
           return
         }
-        this.onChange({ skillEditor: { ...editor, busy: '保存中…', error: '' } })
+        this.onChange({ skillEditor: { ...editor, busy: t('editor.saving'), error: '' } })
         const result = await this.call('saveSkill', {
           ...(editor.at ?? this.scopeArgs()),
           source: editor.source,
@@ -1166,29 +1848,29 @@ window.__ModuleLoader__.load({
           return
         }
         this.onChange({ view: result, skillEditor: undefined, ...this.selectionOf(result) })
-        this.say(`已保存 ${editor.name}`)
+        this.say(t('note.saved', { name: editor.name }))
       }
 
       async removeSkill(source, skill, at) {
         this.setState({
           confirm: {
-            title: `删除技能「${skill.name}」？`,
+            title: t('confirm.deleteSkill', { name: skill.name }),
             body: skill.form === 'dir'
-              ? `整个目录 ${skill.path.replace(/\/SKILL\.md$/u, '')} 会被删除，目录里的资源文件也一起消失。`
-              : `文件 ${skill.path} 会被删除。`,
-            confirmLabel: '删除技能',
+              ? t('confirm.dir.body', { path: skill.path.replace(/\/SKILL\.md$/u, '') })
+              : t('confirm.file.body', { path: skill.path }),
+            confirmLabel: t('confirm.deleteSkill.label'),
             run: async () => {
               const { error } = await this.run('deleteSkill', { ...this.scopeArgsOf(at), source: source.key, name: skill.name })
               if (error !== '') throw new Error(error)
               this.setState({ confirm: undefined })
-              this.say(`已删除技能 ${skill.name}`)
+              this.say(t('note.deletedSkill', { name: skill.name }))
             },
           },
         })
       }
 
       async refresh() {
-        this.onChange({ busy: '刷新中…' })
+        this.onChange({ busy: t('head.refreshing') })
         const result = await this.call('refreshSkills')
         const failure = errorOf(result)
         if (failure !== '') {
@@ -1198,7 +1880,7 @@ window.__ModuleLoader__.load({
         }
         await this.load()
         this.onChange({ busy: '' })
-        this.say(`已重新读取技能目录（${result.invalidated ?? 0} 个来源）`)
+        this.say(t('note.refreshed', { n: result.invalidated ?? 0 }))
       }
 
       async inspectCatalog() {
@@ -1242,7 +1924,7 @@ window.__ModuleLoader__.load({
           return
         }
         this.onChange({ view: result, picker: undefined, ...this.selectionOf(result) })
-        this.say(`已添加目录 ${path}`)
+        this.say(t('note.addedDir', { path }))
       }
 
       // ── editors
@@ -1310,22 +1992,22 @@ window.__ModuleLoader__.load({
         const headers = rowsToPairs(editor.headerRows)
         const problems = [...env.problems, ...headers.problems]
         if (problems.length > 0) {
-          this.onChange({ serverEditor: { ...editor, error: `请先改好这几行：${problems.join('，')}` } })
+          this.onChange({ serverEditor: { ...editor, error: t('serverEditor.problems', { list: problems.join(t('list.separator')) }) } })
           return
         }
         if (server.transport === 'stdio' && String(server.command ?? '').trim() === '') {
-          this.onChange({ serverEditor: { ...editor, error: '本地进程需要一条启动命令' } })
+          this.onChange({ serverEditor: { ...editor, error: t('serverEditor.noCommand') } })
           return
         }
         if (server.transport === 'streamable-http' && String(server.url ?? '').trim() === '') {
-          this.onChange({ serverEditor: { ...editor, error: 'HTTP 连接需要一个地址' } })
+          this.onChange({ serverEditor: { ...editor, error: t('serverEditor.noUrl') } })
           return
         }
         // 一个范围里同名只留一台，新加一台时撞名要当场说出来，否则保存后它会被静默丢掉
         if (editor.index === -1) {
           const taken = (this.entryOf(editor.at)?.servers ?? []).some((row) => String(row?.name ?? '') === String(server.name ?? '').trim())
           if (taken) {
-            this.onChange({ serverEditor: { ...editor, error: `这个范围里已经有一台叫 ${String(server.name ?? '').trim()} 的服务器，换一个名字，或者先删掉那一台` } })
+            this.onChange({ serverEditor: { ...editor, error: t('serverEditor.taken', { name: String(server.name ?? '').trim() }) } })
             return
           }
         }
@@ -1347,7 +2029,7 @@ window.__ModuleLoader__.load({
         try {
           return this.renderPage()
         } catch (error) {
-          return h('div', { className: 'acap-root' }, h(Notice, { tone: 'error' }, `页面渲染失败：${String(error?.message ?? error)}`))
+          return h('div', { className: 'acap-root' }, h(Notice, { tone: 'error' }, t('note.renderFailed', { message: String(error?.message ?? error) })))
         }
       }
 
@@ -1369,12 +2051,12 @@ window.__ModuleLoader__.load({
           this.state.confirm === undefined ? null : this.renderConfirm(),
         ])
 
-        if (loading) return shell(h('div', { className: 'acap-note' }, page === 'mcp' ? '正在读取 MCP 配置…' : '正在读取技能配置…'))
+        if (loading) return shell(h('div', { className: 'acap-note' }, page === 'mcp' ? t('note.reading') : t('note.readingSkills')))
         if (error !== '') return shell(h(Notice, { tone: 'error' }, error))
-        if (view === undefined) return shell(h(Notice, { tone: 'error' }, '宿主没有返回配置'))
+        if (view === undefined) return shell(h(Notice, { tone: 'error' }, t('note.noConfig')))
 
         return shell(h(React.Fragment, null, [
-          embedded ? null : h('div', { key: 'tabs', className: 'acap-tabs', role: 'tablist', 'aria-label': '作用范围' }, SCOPES.map((scope) => {
+          embedded ? null : h('div', { key: 'tabs', className: 'acap-tabs', role: 'tablist', 'aria-label': t('tabs.scope') }, SCOPES.map((scope) => {
             const active = this.state.scope === scope.value
             const count = scope.value === 'global'
               ? (page === 'mcp' ? (view.global?.servers ?? []).length : (view.global?.counts?.skills ?? 0))
@@ -1387,9 +2069,9 @@ window.__ModuleLoader__.load({
               role: 'tab',
               className: 'acap-tab',
               'aria-selected': active,
-              title: scope.hint,
+              title: t(scope.hintKey),
               onClick: () => this.onChange({ scope: scope.value, sourceFilter: 'all', stateFilter: 'all', query: '', catalog: undefined }),
-            }, [h('span', { key: 'l' }, page === 'mcp' ? SCOPE_LABEL[scope.value] : scope.label), h('span', { key: 'c', className: 'acap-tab-count' }, String(count))])
+            }, [h('span', { key: 'l' }, page === 'mcp' ? t(SCOPE_LABEL_KEY[scope.value]) : t(scope.key)), h('span', { key: 'c', className: 'acap-tab-count' }, String(count))])
           })),
           embedded ? null : this.renderAnchor(view),
           page === 'mcp' ? null : this.renderActions(),
@@ -1422,10 +2104,8 @@ window.__ModuleLoader__.load({
         const health = view?.health
         const page = this.page()
         const embedded = this.embedded()
-        const title = page === 'mcp' ? 'MCP管理' : page === 'skills' ? 'SKILL管理' : 'SKILL 与 MCP'
-        const subtitle = page === 'mcp'
-          ? 'MCP 服务器按范围连接，最近的那个范围里同名服务器生效。这里改的连接只在保存后生效，工具以 mcp__名称__ 前缀出现在模型里。'
-          : '技能按存放它的 Agent 分组，来源与单个技能都可以随时停用。停用不会改动磁盘上的任何文件，只影响模型能不能看到。'
+        const title = page === 'mcp' ? t('title.mcp') : page === 'skills' ? t('title.skills') : t('title.both')
+        const subtitle = page === 'mcp' ? t('sub.mcp') : t('sub.skills')
         return h('header', { className: 'acap-head', 'data-compact': embedded }, [
           h('div', { key: 'r', className: 'acap-head-row' }, [
             h('h1', { key: 't', className: 'acap-title' }, [
@@ -1438,9 +2118,9 @@ window.__ModuleLoader__.load({
               variant: 'outline',
               size: 'sm',
               'aria-haspopup': 'dialog',
-              title: '选择这个插件出现在哪些位置',
+              title: t('head.entry.title'),
               onClick: () => this.onChange({ placesOpen: true, status: '' }),
-            }, '入口'),
+            }, t('head.entry')),
             icon(IconRefresh, {}) === null ? null : h(Button, {
               key: 'refresh',
               variant: 'ghost',
@@ -1448,13 +2128,13 @@ window.__ModuleLoader__.load({
               icon: icon(IconRefresh, {}),
               disabled: this.state.busy !== '',
               onClick: () => void this.refresh(),
-            }, this.state.busy === '' ? '刷新' : this.state.busy),
+            }, this.state.busy === '' ? t('head.refresh') : this.state.busy),
           ]),
           embedded ? null : h('p', { key: 's', className: 'acap-sub' }, subtitle),
           embedded ? null : h('div', { key: 'm', className: 'acap-meta' }, [
-            h('span', { key: 'l' }, '记录文件'),
+            h('span', { key: 'l' }, t('head.record')),
             h('code', { key: 'p' }, view?.storePath ?? '…'),
-            health?.status === 'reset' ? h('span', { key: 'h', className: 'acap-tag acap-tag-warn' }, '记录已重置') : null,
+            health?.status === 'reset' ? h('span', { key: 'h', className: 'acap-tag acap-tag-warn' }, t('head.record.reset')) : null,
           ]),
         ])
       }
@@ -1465,23 +2145,23 @@ window.__ModuleLoader__.load({
           const projects = view.projects ?? []
           const candidates = view.projectCandidates ?? []
           return h('div', { key: 'anchor', className: 'acap-anchor' }, [
-            h('span', { key: 'l', className: 'acap-anchor-label' }, '项目'),
+            h('span', { key: 'l', className: 'acap-anchor-label' }, t('anchor.project')),
             projects.length === 0 ? null : h('select', {
               key: 'sel',
               className: 'acap-select',
               value: this.state.projectRoot,
-              'aria-label': '选择项目',
+              'aria-label': t('anchor.project.pick'),
               onChange: (event) => this.onChange({ projectRoot: event.target.value, sourceFilter: 'all', stateFilter: 'all', query: '', catalog: undefined }),
-            }, projects.map((row) => h('option', { key: row.root, value: row.root }, `${row.name}${row.live > 0 ? ` · ${row.live} 条在线` : ''}`))),
+            }, projects.map((row) => h('option', { key: row.root, value: row.root }, row.live > 0 ? `${row.name} · ${t('anchor.live', { n: row.live })}` : row.name))),
             h(Button, {
               key: 'add',
               variant: 'ghost',
               size: 'sm',
               icon: icon(IconFolder, {}),
               onClick: () => void this.openPicker(this.state.projectRoot === '' ? view.defaults?.home : this.state.projectRoot, 'project'),
-            }, projects.length === 0 ? '选择项目目录' : '换一个项目'),
+            }, projects.length === 0 ? t('anchor.project.none') : t('anchor.project.other')),
             candidates.length === 0 ? null : h('span', { key: 'c', className: 'acap-chip-row' }, [
-              h('span', { key: 't', className: 'acap-anchor-label' }, '会话里出现过的项目'),
+              h('span', { key: 't', className: 'acap-anchor-label' }, t('anchor.project.recent')),
               ...candidates.slice(0, 6).map((candidate) => h('button', {
                 key: candidate.root,
                 type: 'button',
@@ -1499,9 +2179,9 @@ window.__ModuleLoader__.load({
           const row = sessions.find((entry) => entry.id === pinned)
           return h('div', { key: 'anchor', className: 'acap-anchor acap-anchor-block' }, [
             h('div', { key: 'bar', className: 'acap-anchor' }, [
-              h('span', { key: 'l', className: 'acap-anchor-label' }, '会话'),
+              h('span', { key: 'l', className: 'acap-anchor-label' }, t('anchor.session')),
               h('span', { key: 'd', className: 'acap-live', 'data-live': row?.live === true }),
-              h('span', { key: 'n', className: 'acap-anchor-cur', title: row?.cwd ?? '' }, row?.label ?? '未命名会话'),
+              h('span', { key: 'n', className: 'acap-anchor-cur', title: row?.cwd ?? '' }, row?.label ?? t('anchor.unnamed')),
             ]),
             row?.cwd === undefined || row.cwd === '' ? null : h('span', { key: 'p', className: 'acap-anchor-path', title: row.cwd }, shortenPath(row.cwd, 96)),
           ])
@@ -1516,25 +2196,25 @@ window.__ModuleLoader__.load({
             h('span', { key: 'l', className: 'acap-anchor-label' }, '会话'),
             h('div', { key: 'f', className: 'acap-picker-field' }, h(Input, {
               value: this.state.sessionQuery,
-              placeholder: '按名称或目录筛选',
-              'aria-label': '筛选会话',
+              placeholder: t('anchor.session.filter'),
+              'aria-label': t('anchor.session.filter.label'),
               onChange: (event) => this.onChange({ sessionQuery: event.target.value }),
             })),
-            sessions.length === 0 ? null : h('span', { key: 'c', className: 'acap-picker-count' }, `${matching.length} 条`),
+            sessions.length === 0 ? null : h('span', { key: 'c', className: 'acap-picker-count' }, t('anchor.session.count', { n: matching.length })),
           ]),
           selected === undefined
-            ? h('span', { key: 'cur', className: 'acap-picker-current' }, '还没有选中会话')
+            ? h('span', { key: 'cur', className: 'acap-picker-current' }, t('picker.noSession'))
             : h('div', { key: 'cur', className: 'acap-picker-current' }, [
-              h('span', { key: 't', className: 'acap-picker-current-label' }, '正在编辑'),
-              h('span', { key: 'n', className: 'acap-picker-current-name' }, selected.label ?? '未命名会话'),
+              h('span', { key: 't', className: 'acap-picker-current-label' }, t('picker.editing')),
+              h('span', { key: 'n', className: 'acap-picker-current-name' }, selected.label ?? t('anchor.unnamed')),
               selected.cwd === undefined || selected.cwd === ''
                 ? null
                 : h('span', { key: 'p', className: 'acap-picker-current-path', title: selected.cwd }, shortenPath(selected.cwd, 52)),
             ]),
           sessions.length === 0
-            ? h('div', { key: 'e', className: 'acap-note' }, '还没有已知的会话，先在首页开一条会话。')
+            ? h('div', { key: 'e', className: 'acap-note' }, t('picker.noKnown'))
             : h('div', { key: 'list', className: 'acap-picker-list acap-session-list' }, matching.length === 0
-              ? h('div', { key: 'none', className: 'acap-note', style: { padding: '8px 8px' } }, `没有匹配「${this.state.sessionQuery}」的会话。`)
+              ? h('div', { key: 'none', className: 'acap-note', style: { padding: '8px 8px' } }, t('anchor.session.noMatch', { query: this.state.sessionQuery }))
               : matching.slice(0, 60).map((row) => {
                 const meta = row.cwd === undefined || row.cwd === '' ? agoOf(row.updatedAt) : shortenPath(row.cwd, 60)
                 return h('button', {
@@ -1547,7 +2227,7 @@ window.__ModuleLoader__.load({
                 }, [
                   h('span', { key: 'd', className: 'acap-live', 'data-live': row.live === true }),
                   h('span', { key: 'm', className: 'acap-session-main' }, [
-                    h('span', { key: 't', className: 'acap-session-title' }, row.label ?? row.title ?? '未命名会话'),
+                    h('span', { key: 't', className: 'acap-session-title' }, row.label ?? row.title ?? t('anchor.unnamed')),
                     meta === '' ? null : h('span', { key: 'p', className: 'acap-session-path' }, meta),
                   ]),
                   row.id === this.state.sessionId ? h('span', { key: 'ok', className: 'acap-session-ok' }, icon(IconCheck, {})) : null,
@@ -1561,16 +2241,16 @@ window.__ModuleLoader__.load({
         const sources = this.scopeView()?.sources ?? []
         const target = sources.find((source) => source.exists === true) ?? sources[0]
         return h('div', { key: 'actions', className: 'acap-actions' }, [
-          this.embedded() ? h('span', { key: 'where', className: 'acap-actions-where', title: '这条会话自己的目录，别的会话读不到' }, '写进这条会话') : null,
+          this.embedded() ? h('span', { key: 'where', className: 'acap-actions-where', title: t('action.where.title') }, t('action.where')) : null,
           h(Button, {
             key: 'new',
             variant: 'primary',
             size: 'sm',
             icon: icon(IconPlus, {}),
             disabled: anchor === undefined || target === undefined,
-            title: target === undefined ? '这个范围还没有可写的技能目录' : `写入 ${target.label}`,
+            title: target === undefined ? t('action.create.noSource') : t('action.create.into', { label: target.label }),
             onClick: () => this.openSkillEditor(target, undefined, this.scopeAt()),
-          }, '新建技能'),
+          }, t('action.create')),
           h(Button, {
             key: 'src',
             variant: 'outline',
@@ -1578,7 +2258,7 @@ window.__ModuleLoader__.load({
             icon: icon(IconFolder, {}),
             disabled: anchor === undefined,
             onClick: () => void this.openPicker(anchor?.scope === 'project' ? anchor.root : this.state.view?.defaults?.home, 'source'),
-          }, '添加目录'),
+          }, t('action.addSource')),
           h('span', { key: 'g', className: 'acap-grow' }),
           h(Button, {
             key: 'cat',
@@ -1586,17 +2266,17 @@ window.__ModuleLoader__.load({
             size: 'sm',
             disabled: anchor === undefined,
             onClick: () => void this.inspectCatalog(),
-          }, '核对模型视角'),
+          }, t('action.catalog')),
         ])
       }
 
       renderStats() {
         const counts = this.counts()
         const cells = [
-          { key: 's', kind: 'skills', n: counts.skills, l: '个技能' },
-          { key: 'e', kind: 'enabled', n: counts.enabled, l: '个已启用' },
-          { key: 'd', kind: 'disabled', n: counts.disabled, l: '个已停用', off: counts.disabled === 0 },
-          { key: 'src', kind: 'sources', n: `${counts.activeSources}/${counts.sources}`, l: '个来源在用' },
+          { key: 's', kind: 'skills', n: counts.skills, l: t('stats.skills') },
+          { key: 'e', kind: 'enabled', n: counts.enabled, l: t('stats.enabled') },
+          { key: 'd', kind: 'disabled', n: counts.disabled, l: t('stats.disabled'), off: counts.disabled === 0 },
+          { key: 'src', kind: 'sources', n: `${counts.activeSources}/${counts.sources}`, l: t('stats.sources') },
         ]
         return h('div', { key: 'stats', className: 'acap-stats' }, cells.map((cell) => h('div', {
           key: cell.key,
@@ -1615,20 +2295,20 @@ window.__ModuleLoader__.load({
             key: 'src',
             className: 'acap-select',
             value: this.state.sourceFilter,
-            'aria-label': '按来源筛选',
+            'aria-label': t('filter.source'),
             onChange: (event) => this.onChange({ sourceFilter: event.target.value }),
-          }, [h('option', { key: 'all', value: 'all' }, '全部来源'), ...sources.map((source) => h('option', { key: source.key, value: source.key }, `${source.label}（${(source.skills ?? []).length}）`))]),
+          }, [h('option', { key: 'all', value: 'all' }, t('filter.source.all')), ...sources.map((source) => h('option', { key: source.key, value: source.key }, t('filter.source.option', { label: source.label, n: (source.skills ?? []).length })))]),
           h('select', {
             key: 'state',
             className: 'acap-select',
             value: this.state.stateFilter,
-            'aria-label': '按状态筛选',
+            'aria-label': t('filter.state'),
             onChange: (event) => this.onChange({ stateFilter: event.target.value }),
-          }, STATE_FILTERS.map((option) => h('option', { key: option.value, value: option.value }, option.label))),
+          }, STATE_FILTERS.map((option) => h('option', { key: option.value, value: option.value }, t(option.key)))),
           h('div', { key: 'q', className: 'acap-search' }, h(Input, {
             value: this.state.query,
-            placeholder: '搜索技能名称或说明',
-            'aria-label': '搜索技能',
+            placeholder: t('filter.query'),
+            'aria-label': t('filter.query.label'),
             icon: icon(IconSearch, {}),
             onChange: (event) => this.onChange({ query: event.target.value }),
           })),
@@ -1639,16 +2319,16 @@ window.__ModuleLoader__.load({
         const anchor = this.anchor()
         if (anchor === undefined) {
           return h('div', { key: 'sources', className: 'acap-empty' }, [
-            h('span', { key: 't', className: 'acap-empty-title' }, this.state.scope === 'project' ? '还没有选中的项目' : '还没有已知的会话'),
-            h('span', { key: 'b', className: 'acap-empty-body' }, this.state.scope === 'project' ? '选一个项目目录，就能看到它里面各个 Agent 的技能目录。' : '开一条会话之后，这里会列出它的技能目录。'),
+            h('span', { key: 't', className: 'acap-empty-title' }, this.state.scope === 'project' ? t('empty.noProject') : t('empty.noSession')),
+            h('span', { key: 'b', className: 'acap-empty-body' }, this.state.scope === 'project' ? t('empty.noProject.body') : t('empty.noSession.body')),
           ])
         }
         const rows = this.filteredSources()
         if (rows.length === 0) {
           const all = this.scopeView()?.sources ?? []
           return h('div', { key: 'sources', className: 'acap-sources' }, h('div', { className: 'acap-empty' }, [
-            h('span', { key: 't', className: 'acap-empty-title' }, all.length === 0 ? '这个范围还没有技能来源' : '没有符合筛选条件的技能'),
-            h('span', { key: 'b', className: 'acap-empty-body' }, all.length === 0 ? '添加一个目录，或者新建一个技能。' : '换一个来源或状态再试。'),
+            h('span', { key: 't', className: 'acap-empty-title' }, all.length === 0 ? t('empty.noSource') : t('empty.noMatch')),
+            h('span', { key: 'b', className: 'acap-empty-body' }, all.length === 0 ? t('empty.noSource.body') : t('empty.noMatch.body')),
           ]))
         }
         return h('div', { key: 'sources', className: 'acap-sources' }, rows.map((source) => this.renderSource(source, this.scopeAt())))
@@ -1666,19 +2346,19 @@ window.__ModuleLoader__.load({
               type: 'button',
               className: 'acap-fold',
               'aria-expanded': closed !== true,
-              'aria-label': `${closed === true ? '展开' : '收起'} ${source.label}`,
+              'aria-label': closed === true ? t('source.expand', { label: source.label }) : t('source.fold', { label: source.label }),
               onClick: () => this.onChange({ collapsed: { ...(this.state.collapsed ?? {}), [source.key]: closed !== true } }),
             }, h('span', { className: closed === true ? 'acap-caret' : 'acap-caret acap-caret-open' }, icon(IconChevron, {}))),
             h(Mark, { key: 'm', source }),
             h('div', { key: 'id', className: 'acap-src-id' }, [
               h('div', { key: 'n', className: 'acap-src-name' }, [
                 source.label,
-                h('span', { key: 'c', className: 'acap-tab-count' }, `${skills.length} 个技能`),
-                source.kind === 'session' ? h(Tag, { key: 'k', tone: 'info' }, '会话目录') : null,
-                source.custom === true ? h(Tag, { key: 'cu' }, '自定义目录') : null,
-                source.hostScanned === true ? h(Tag, { key: 'hs' }, '内置读取') : null,
-                source.enabled !== true ? h(Tag, { key: 'off', tone: 'off' }, '已停用') : null,
-                (source.forced ?? []).length === 0 ? null : h(Tag, { key: 'fo', tone: 'warn' }, `${source.forced.length} 个单独开着`),
+                h('span', { key: 'c', className: 'acap-tab-count' }, t('zone.skills', { n: skills.length })),
+                source.kind === 'session' ? h(Tag, { key: 'k', tone: 'info' }, t('source.tag.session')) : null,
+                source.custom === true ? h(Tag, { key: 'cu' }, t('source.tag.custom')) : null,
+                source.hostScanned === true ? h(Tag, { key: 'hs' }, t('source.tag.host')) : null,
+                source.enabled !== true ? h(Tag, { key: 'off', tone: 'off' }, t('source.tag.off')) : null,
+                (source.forced ?? []).length === 0 ? null : h(Tag, { key: 'fo', tone: 'warn' }, t('source.tag.forced', { n: source.forced.length })),
               ]),
               h('div', { key: 'p', className: 'acap-src-path', title: source.dir }, shortenPath(source.dir)),
             ]),
@@ -1689,12 +2369,12 @@ window.__ModuleLoader__.load({
                 variant: 'ghost',
                 size: 'sm',
                 disabled: source.enabled !== true,
-                title: open.length === skills.length ? '把这一组技能全部停用' : '把这一组技能全部启用',
+                title: open.length === skills.length ? t('source.group.off.title') : t('source.group.on.title'),
                 onClick: () => void this.toggleGroup(source, skills, open.length !== skills.length, at),
-              }, open.length === skills.length ? '整组停用' : '整组启用'),
-              h(Switch, { key: 'sw', checked: source.enabled === true, label: `启用来源 ${source.label}`, title: '启停这个来源里的全部技能', onChange: (next) => void this.toggleSource(source, next, at) }),
+              }, open.length === skills.length ? t('source.group.off') : t('source.group.on')),
+              h(Switch, { key: 'sw', checked: source.enabled === true, label: t('source.enable', { label: source.label }), title: t('source.enable.title'), onChange: (next) => void this.toggleSource(source, next, at) }),
               source.custom === true
-                ? h(IconButton, { key: 'rm', label: `移除来源 ${source.label}`, danger: true, onClick: () => void this.removeSource(source, at) }, icon(IconTrash, { size: 13 }))
+                ? h(IconButton, { key: 'rm', label: t('source.remove', { label: source.label }), danger: true, onClick: () => void this.removeSource(source, at) }, icon(IconTrash, { size: 13 }))
                 : null,
             ]),
           ]),
@@ -1702,10 +2382,10 @@ window.__ModuleLoader__.load({
             ? null
             : skills.length === 0
               ? h('div', { key: 'b', className: 'acap-skills' }, h('div', { className: 'acap-src-hint' }, source.error === ''
-                ? '这个目录里还没有技能。'
+                ? t('source.path.empty')
                 : source.kind === 'session'
-                  ? '这个目录会在第一次新建技能时创建。'
-                  : '这个目录还不存在，换一个路径，或者先建好目录。'))
+                  ? t('source.path.session')
+                  : t('source.path.missing')))
               : h('div', { key: 'b', className: 'acap-skills' }, skills.map((skill) => this.renderSkill(source, skill, at))),
         ])
       }
@@ -1715,7 +2395,7 @@ window.__ModuleLoader__.load({
         const names = skills.filter((skill) => skill.valid !== false).map((skill) => skill.name)
         if (names.length === 0) return
         const result = await this.run('toggleSkills', { ...this.scopeArgsOf(at), source: source.key, names, enabled, wholeGroup: true })
-        if (result.error === '') this.say(`${source.label}：${enabled ? '已启用' : '已停用'} ${names.length} 个技能`)
+        if (result.error === '') this.say(t('note.sourceToggle', { label: source.label, state: enabled ? t('note.sourceEnabled') : t('note.sourceDisabled'), n: names.length }))
         else this.say(result.error, 'error')
       }
 
@@ -1728,29 +2408,29 @@ window.__ModuleLoader__.load({
           return
         }
         syncShell(prefs)
-        this.say(value ? '已经把它加到这个位置' : '已经把这个入口收起来')
+        this.say(value ? t('note.placed') : t('note.unplaced'))
       }
 
       /** The one place that decides where this plugin shows up. */
       renderPlacesSheet() {
         const prefs = this.state.view?.prefs ?? {}
         const places = [
-          { key: 'sidebarSkills', label: '主页左边栏：skill', hint: '主页左边多一个图标，点开就是整页的 skill 管理' },
-          { key: 'sidebarMcp', label: '主页左边栏：mcp', hint: '主页左边多一个图标，点开就是整页的 mcp 管理' },
-          { key: 'tabSkills', label: '对话页顶部 tab：skill', hint: '每条对话的上方多一个 skill 页，管的就是这条会话' },
-          { key: 'tabMcp', label: '对话页顶部 tab：mcp', hint: '每条对话的上方多一个 mcp 页，管的就是这条会话' },
+          { key: 'sidebarSkills', label: t('places.sidebarSkills'), hint: t('places.sidebarSkills.hint') },
+          { key: 'sidebarMcp', label: t('places.sidebarMcp'), hint: t('places.sidebarMcp.hint') },
+          { key: 'tabSkills', label: t('places.tabSkills'), hint: t('places.tabSkills.hint') },
+          { key: 'tabMcp', label: t('places.tabMcp'), hint: t('places.tabMcp.hint') },
         ]
         const openCount = places.filter((place) => prefs[place.key] === true).length
         return h(Sheet, {
           key: 'places-sheet',
-          title: '入口',
-          subtitle: '挑这个插件出现在哪里。开着的入口立刻出现，关掉的立刻收起。',
+          title: t('places.title'),
+          subtitle: t('places.sub'),
           small: true,
           onClose: () => this.onChange({ placesOpen: false }),
           footer: h(React.Fragment, null, [
-            h('span', { key: 'c', className: 'acap-sheet-count' }, `开着 ${openCount} / ${places.length}`),
+            h('span', { key: 'c', className: 'acap-sheet-count' }, t('places.count', { open: openCount, total: places.length })),
             h('span', { key: 'g', className: 'acap-grow' }),
-            h(Button, { key: 'd', variant: 'outline', size: 'sm', onClick: () => this.onChange({ placesOpen: false }) }, '关闭'),
+            h(Button, { key: 'd', variant: 'outline', size: 'sm', onClick: () => this.onChange({ placesOpen: false }) }, t('places.close')),
           ]),
         }, h('div', { className: 'acap-place-list' }, places.map((place) => h('div', {
           key: place.key,
@@ -1780,18 +2460,18 @@ window.__ModuleLoader__.load({
           h('div', { key: 'm', className: 'acap-skill-main' }, [
             h('div', { key: 't', className: 'acap-skill-top' }, [
               h('code', { key: 'n', className: 'acap-skill-name' }, skill.name),
-              skill.form === 'file' ? h(Tag, { key: 'f' }, '单文件') : null,
-              skill.valid === false ? h(Tag, { key: 'b', tone: 'err' }, skill.error === '' ? '解析异常' : skill.error) : null,
-              skill.forced === true ? h(Tag, { key: 'fo', tone: 'warn' }, '单独开启') : null,
-              skill.modelInvocable === false ? h(Tag, { key: 'mi', tone: 'off' }, '不自动加载') : null,
-              skill.userInvocable === false ? h(Tag, { key: 'ui', tone: 'off' }, '不接受 / 命令') : null,
+              skill.form === 'file' ? h(Tag, { key: 'f' }, t('skill.tag.file')) : null,
+              skill.valid === false ? h(Tag, { key: 'b', tone: 'err' }, skill.error === '' ? t('skill.tag.broken') : skill.error) : null,
+              skill.forced === true ? h(Tag, { key: 'fo', tone: 'warn' }, t('skill.tag.forced')) : null,
+              skill.modelInvocable === false ? h(Tag, { key: 'mi', tone: 'off' }, t('skill.tag.noModel')) : null,
+              skill.userInvocable === false ? h(Tag, { key: 'ui', tone: 'off' }, t('skill.tag.noUser')) : null,
             ]),
-            h('div', { key: 'd', className: 'acap-skill-desc', title: skill.description }, skill.description === '' ? '没有写说明' : skill.description),
+            h('div', { key: 'd', className: 'acap-skill-desc', title: skill.description }, skill.description === '' ? t('skill.noDescription') : skill.description),
           ]),
           h('div', { key: 'a', className: 'acap-skill-actions' }, [
-            h(Switch, { key: 'sw', checked: skill.enabled === true, label: `启用技能 ${skill.name}`, onChange: (next) => void this.toggleSkill(source, skill, next, at) }),
-            h(IconButton, { key: 'ed', label: `编辑 ${skill.name}`, onClick: () => this.openSkillEditor(source, skill, at) }, icon(IconEdit, { size: 13 })),
-            h(IconButton, { key: 'rm', label: `删除 ${skill.name}`, danger: true, onClick: () => void this.removeSkill(source, skill, at) }, icon(IconTrash, { size: 13 })),
+            h(Switch, { key: 'sw', checked: skill.enabled === true, label: t('skill.enable', { name: skill.name }), onChange: (next) => void this.toggleSkill(source, skill, next, at) }),
+            h(IconButton, { key: 'ed', label: t('skill.edit', { name: skill.name }), onClick: () => this.openSkillEditor(source, skill, at) }, icon(IconEdit, { size: 13 })),
+            h(IconButton, { key: 'rm', label: t('skill.delete', { name: skill.name }), danger: true, onClick: () => void this.removeSkill(source, skill, at) }, icon(IconTrash, { size: 13 })),
           ]),
         ])
       }
@@ -1808,10 +2488,10 @@ window.__ModuleLoader__.load({
           session: (view.sessions ?? []).find((row) => row.id === this.state.sessionId)?.servers?.length ?? 0,
         }
         const parts = []
-        if (current !== 'global' && counts.global > 0) parts.push(`全局 ${counts.global} 个`)
-        if (current !== 'project' && counts.project > 0) parts.push(`项目 ${counts.project} 个`)
-        if (current !== 'session' && counts.session > 0) parts.push(`会话 ${counts.session} 个`)
-        return parts.length === 0 ? '' : `别的范围已经有：${parts.join('、')}`
+        if (current !== 'global' && counts.global > 0) parts.push(t('server.elsewhere.part', { scope: t('scope.global.short'), n: counts.global }))
+        if (current !== 'project' && counts.project > 0) parts.push(t('server.elsewhere.part', { scope: t('scope.project.short'), n: counts.project }))
+        if (current !== 'session' && counts.session > 0) parts.push(t('server.elsewhere.part', { scope: t('scope.session.short'), n: counts.session }))
+        return parts.length === 0 ? '' : t('server.elsewhere', { parts: parts.join(t('list.separator')) })
       }
 
       renderServers(entry, at, showHeader = true) {
@@ -1819,7 +2499,7 @@ window.__ModuleLoader__.load({
         const servers = entry?.servers ?? []
         const enabled = servers.filter((server) => server.enabled !== false).length
         const header = h('div', { key: 'h', className: 'acap-section-head' }, [
-          h('h2', { key: 't', className: 'acap-section-title' }, ['MCP 服务器', h('span', { key: 'c', className: 'acap-section-count' }, `${enabled} 个启用 / 共 ${servers.length} 个`)]),
+          h('h2', { key: 't', className: 'acap-section-title' }, [t('server.section'), h('span', { key: 'c', className: 'acap-section-count' }, t('server.section.count', { enabled, total: servers.length }))]),
           h('span', { key: 'g', className: 'acap-grow' }),
           h(Button, {
             key: 'r',
@@ -1827,7 +2507,7 @@ window.__ModuleLoader__.load({
             size: 'sm',
             icon: icon(IconRefresh, {}),
             onClick: () => void this.refreshMcp(),
-          }, '刷新状态'),
+          }, t('server.refresh')),
           h(Button, {
             key: 'a',
             variant: 'outline',
@@ -1835,16 +2515,16 @@ window.__ModuleLoader__.load({
             icon: icon(IconPlus, {}),
             disabled: anchor === undefined,
             onClick: () => this.openServerEditor(-1, undefined, at),
-          }, '添加服务器'),
+          }, t('server.add')),
         ])
         const conflicts = entry?.conflicts ?? []
         const elsewhere = this.otherScopeServers(at)
         const body = servers.length === 0
           ? h('div', { key: 'e', className: 'acap-empty' }, [
-            h('span', { key: 't', className: 'acap-empty-title' }, '这个范围还没有 MCP 服务器'),
+            h('span', { key: 't', className: 'acap-empty-title' }, t('server.empty')),
             h('span', { key: 'b', className: 'acap-empty-body' }, elsewhere === ''
-              ? '添加之后，它的工具会以 mcp__名称__ 前缀出现在这个范围的模型里。'
-              : `${elsewhere}。切到那个范围可以改它，或者在这里为这个范围单独加一个。`),
+              ? t('server.empty.body')
+              : t('server.empty.elsewhere', { text: elsewhere })),
           ])
           : h('div', { key: 'l', style: { display: 'flex', flexDirection: 'column', gap: 8 } }, servers.map((server, index) => {
             const scope = this.scopeArgsOf(at).scope
@@ -1854,8 +2534,8 @@ window.__ModuleLoader__.load({
               h('div', { key: 'main', className: 'acap-srv-main' }, [
                 h('div', { key: 't', className: 'acap-srv-top' }, [
                   h('code', { key: 'n', className: 'acap-srv-name' }, server.name),
-                  h(Tag, { key: 'tr' }, server.transport === 'stdio' ? '本地进程' : 'HTTP'),
-                  status === undefined ? null : h(Tag, { key: 'tl', tone: status.toolCount > 0 ? 'on' : 'off', title: status.live === false ? '这条会话还没有活动，工具要等会话开始后才连上' : undefined }, status.live === false ? '会话未激活' : `${status.toolCount ?? 0} 个工具`),
+                  h(Tag, { key: 'tr' }, server.transport === 'stdio' ? t('server.tag.stdio') : t('server.tag.http')),
+                  status === undefined ? null : h(Tag, { key: 'tl', tone: status.toolCount > 0 ? 'on' : 'off', title: status.live === false ? t('server.live.hint') : undefined }, status.live === false ? t('server.tag.dormant') : t('server.tools', { n: status.toolCount ?? 0 })),
                   typeof status?.error === 'string' && status.error !== '' ? h(Tag, { key: 'er', tone: 'err' }, status.error) : null,
                 ]),
                 h('div', { key: 'c', className: 'acap-srv-cmd', title: server.transport === 'stdio' ? [server.command, ...(server.args ?? [])].join(' ') : server.url },
@@ -1863,9 +2543,9 @@ window.__ModuleLoader__.load({
                 (status?.tools ?? []).length === 0 ? null : h('div', { key: 'tools', className: 'acap-tools' }, (status.tools ?? []).slice(0, 8).map((name) => h('span', { key: name, className: 'acap-tool' }, name))),
               ]),
               h('div', { key: 'a', className: 'acap-srv-actions' }, [
-                h(Switch, { key: 'sw', checked: server.enabled !== false, label: `启用服务器 ${server.name}`, onChange: () => void this.toggleServer(index, server, at) }),
-                h(IconButton, { key: 'ed', label: `编辑服务器 ${server.name}`, onClick: () => this.openServerEditor(index, server, at) }, icon(IconEdit, { size: 13 })),
-                h(IconButton, { key: 'rm', label: `删除服务器 ${server.name}`, danger: true, onClick: () => void this.removeServer(index, server, at) }, icon(IconTrash, { size: 13 })),
+                h(Switch, { key: 'sw', checked: server.enabled !== false, label: t('server.enable', { name: server.name }), onChange: () => void this.toggleServer(index, server, at) }),
+                h(IconButton, { key: 'ed', label: t('server.edit', { name: server.name }), onClick: () => this.openServerEditor(index, server, at) }, icon(IconEdit, { size: 13 })),
+                h(IconButton, { key: 'rm', label: t('server.delete', { name: server.name }), danger: true, onClick: () => void this.removeServer(index, server, at) }, icon(IconTrash, { size: 13 })),
               ]),
             ])
           }))
@@ -1873,7 +2553,7 @@ window.__ModuleLoader__.load({
         return h('section', { key: 'servers', className: 'acap-section' }, [
           showHeader ? header : null,
           this.state.mcpError === '' ? null : h(Notice, { key: 'err', tone: 'error' }, this.state.mcpError),
-          conflicts.length === 0 ? null : h(Notice, { key: 'cf', tone: 'warn' }, `同名服务器在更靠近的范围里也有，最近的那个生效：${conflicts.map((row) => row.name).join('，')}`),
+          conflicts.length === 0 ? null : h(Notice, { key: 'cf', tone: 'warn' }, t('server.conflicts', { names: conflicts.map((row) => row.name).join(t('list.separator')) })),
           body,
         ])
       }
@@ -1886,21 +2566,21 @@ window.__ModuleLoader__.load({
         const project = root === '' ? undefined : (view.projects ?? []).find((row) => row.root === root)
         const sections: Array<{ key: string; title: string; hint: string; entry: any; at: { scope: string; root?: string; sessionId?: string } }> = [{
           key: 'session',
-          title: '这条会话',
-          hint: '只在这条会话里生效，比项目和全局都近',
+          title: t('zone.session'),
+          hint: t('zone.session.hint'),
           entry: session,
           at: { scope: 'session', sessionId },
         }]
         if (project !== undefined) {
           sections.push({
             key: 'project',
-            title: `项目 · ${lastSegment(root)}`,
-            hint: '同一个项目里的每条会话都会读到',
+            title: `${t('scope.project.short')} · ${lastSegment(root)}`,
+            hint: t('zone.project.hint'),
             entry: project,
             at: { scope: 'project', root },
           })
         }
-        sections.push({ key: 'global', title: '全局', hint: '所有项目和会话都会读到', entry: view.global, at: { scope: 'global' } })
+        sections.push({ key: 'global', title: t('zone.global'), hint: t('zone.global.hint'), entry: view.global, at: { scope: 'global' } })
         return h('div', { key: 'zones', className: 'acap-zones' }, sections.map((section) => this.renderZone(section)))
       }
 
@@ -1912,8 +2592,8 @@ window.__ModuleLoader__.load({
           : (section.entry?.counts?.skills ?? 0) > 0
         const open = this.state.zoneOpen?.[section.key] ?? filled
         const count = page === 'mcp'
-          ? `${(section.entry?.servers ?? []).length} 个服务器`
-          : `${section.entry?.counts?.skills ?? 0} 个技能`
+          ? t('zone.servers', { n: (section.entry?.servers ?? []).length })
+          : t('zone.skills', { n: section.entry?.counts?.skills ?? 0 })
         return h('section', { key: section.key, className: 'acap-zone', 'data-zone': section.key, 'data-open': open }, [
           h('button', {
             key: 'h',
@@ -1936,7 +2616,7 @@ window.__ModuleLoader__.load({
                   size: 'sm',
                   icon: icon(IconPlus, {}),
                   onClick: () => this.openServerEditor(-1, undefined, section.at),
-                }, '添加服务器')),
+                }, t('server.add'))),
                 this.renderServers(section.entry, section.at, false),
               ])
               : this.renderZoneSources(section)
@@ -1948,10 +2628,10 @@ window.__ModuleLoader__.load({
         const rows = this.filteredSources(section.entry)
         if (rows.length === 0) {
           return h('div', { key: 'e', className: 'acap-empty' }, [
-            h('span', { key: 't', className: 'acap-empty-title' }, section.key === 'session' ? '这条会话还没有自己的技能' : '这个范围还没有技能'),
+            h('span', { key: 't', className: 'acap-empty-title' }, section.key === 'session' ? t('zone.empty.session') : t('empty.noSource')),
             h('span', { key: 'b', className: 'acap-empty-body' }, section.key === 'session'
-              ? '新建技能会写进这条会话自己的目录，只有它读得到。'
-              : '添加一个目录，或者新建一个技能。'),
+              ? t('zone.empty.session.body')
+              : t('empty.noSource.body')),
           ])
         }
         return h('div', { key: 's', className: 'acap-sources' }, rows.map((source) => this.renderSource(source, section.at)))
@@ -1962,16 +2642,16 @@ window.__ModuleLoader__.load({
         const anchor = this.anchor()
         return h(Sheet, {
           key: 'catalog',
-          title: '模型现在能看到的技能',
-          subtitle: anchor === undefined ? '这个范围还没有目标' : '这一份名单来自技能注册表本身，是模型决定加载技能时读到的目录。',
+          title: t('catalog.title'),
+          subtitle: anchor === undefined ? t('catalog.noAnchor') : t('catalog.sub'),
           small: false,
           onClose: () => this.onChange({ catalog: undefined }),
           footer: h(React.Fragment, null, [
             h('span', { key: 'g', className: 'acap-grow' }),
-            h(Button, { key: 'c', variant: 'outline', size: 'sm', onClick: () => this.onChange({ catalog: undefined }) }, '关闭'),
+            h(Button, { key: 'c', variant: 'outline', size: 'sm', onClick: () => this.onChange({ catalog: undefined }) }, t('composer.close')),
           ]),
         }, catalog.loading === true
-          ? h('div', { className: 'acap-note' }, '正在读取…')
+          ? h('div', { className: 'acap-note' }, t('catalog.loading'))
           : catalog.error !== undefined
             ? h(Notice, { tone: 'error' }, catalog.error)
             : this.renderCatalogRows(catalog))
@@ -1983,8 +2663,8 @@ window.__ModuleLoader__.load({
         const hidden = all.length - visible.length
         if (visible.length === 0) {
           return h(React.Fragment, null, [
-            h('div', { key: 'e', className: 'acap-note' }, '这个范围里没有模型能看到的技能。'),
-            hidden === 0 ? null : h('div', { key: 'h', className: 'acap-note' }, `另有 ${hidden} 个名字被停用或被更近的范围挡在后面。`),
+            h('div', { key: 'e', className: 'acap-note' }, t('catalog.empty')),
+            hidden === 0 ? null : h('div', { key: 'h', className: 'acap-note' }, t('catalog.hidden', { n: hidden })),
           ])
         }
         return h(React.Fragment, null, [
@@ -1994,12 +2674,12 @@ window.__ModuleLoader__.load({
                 h(Mark, { key: 'mk', source: { id: row.source, label: row.sourceLabel } }),
                 h('code', { key: 'n', className: 'acap-skill-name' }, row.name),
                 h(Tag, { key: 's', hue: hueOf(row.source) }, row.sourceLabel ?? row.source),
-                row.scope === undefined ? null : h(Tag, { key: 'sc', hue: SCOPE_HUE[row.scope] ?? 'slate' }, SCOPE_LABEL[row.scope] ?? row.scope),
+                row.scope === undefined ? null : h(Tag, { key: 'sc', hue: SCOPE_HUE[row.scope] ?? 'slate' }, t(SCOPE_LABEL_KEY[row.scope] ?? row.scope)),
                 row.provider === 'skill-mcp-manager' ? null : h(Tag, { key: 'p' }, row.provider),
               ]),
             ]),
           ]))),
-          hidden === 0 ? null : h('div', { key: 'h', className: 'acap-note' }, `另有 ${hidden} 个名字被停用或被更近的范围挡在后面，模型读不到。`),
+          hidden === 0 ? null : h('div', { key: 'h', className: 'acap-note' }, t('catalog.hidden.more', { n: hidden })),
         ])
       }
 
@@ -2018,93 +2698,91 @@ window.__ModuleLoader__.load({
         const longFields = String(editor.description ?? '').length
         return h(Sheet, {
           key: 'skill-editor',
-          title: editor.mode === 'create' ? '新建技能' : `编辑 ${editor.renameFrom}`,
-          subtitle: editor.mode === 'create'
-            ? '写进所选来源的目录。保存之后，这条会话立刻能从目录里看到它。'
-            : '改名字等于改目录名；正文与说明直接写进 SKILL.md。',
+          title: editor.mode === 'create' ? t('editor.create') : t('editor.edit', { name: editor.renameFrom }),
+          subtitle: editor.mode === 'create' ? t('editor.create.sub') : t('editor.edit.sub'),
           onClose: () => this.onChange({ skillEditor: undefined }),
           footer: h(React.Fragment, null, [
-            h('span', { key: 'h', className: 'acap-sheet-hint', title: dir }, `${editor.sourceLabel ?? ''} · ${editor.mode === 'create' ? '新技能' : '修改中'}`),
+            h('span', { key: 'h', className: 'acap-sheet-hint', title: dir }, `${editor.sourceLabel ?? ''} · ${editor.mode === 'create' ? t('editor.new') : t('editor.editing')}`),
             h('span', { key: 'g', className: 'acap-grow' }),
-            h(Button, { key: 'c', variant: 'outline', size: 'sm', disabled: editor.busy !== '', onClick: () => this.onChange({ skillEditor: undefined }) }, '取消'),
-            h(Button, { key: 's', variant: 'primary', size: 'sm', disabled: editor.busy !== '', onClick: () => void this.saveSkill(editor) }, editor.busy === '' ? '保存' : editor.busy),
+            h(Button, { key: 'c', variant: 'outline', size: 'sm', disabled: editor.busy !== '', onClick: () => this.onChange({ skillEditor: undefined }) }, t('editor.cancel')),
+            h(Button, { key: 's', variant: 'primary', size: 'sm', disabled: editor.busy !== '', onClick: () => void this.saveSkill(editor) }, editor.busy === '' ? t('editor.save') : editor.busy),
           ]),
         }, h('div', { className: 'acap-edit' }, [
           h('div', { key: 'l', className: 'acap-edit-col' }, [
             h('div', { key: 'pair', className: 'acap-edit-pair' }, [
-              h(Field, { key: 'n', label: '名称', required: true, hint: '小写字母、数字和连字符，也是目录名' }, h(Input, {
+              h(Field, { key: 'n', label: t('field.name'), required: true, hint: t('field.name.hint') }, h(Input, {
                 value: editor.name,
                 placeholder: 'pdf-tools',
-                'aria-label': '技能名称',
+                'aria-label': t('field.name.label'),
                 'aria-invalid': nameProblem(editor.name) !== '',
                 onChange: (event) => update({ name: event.target.value }),
               })),
-              h(Field, { key: 'w', label: '什么时候用', hint: '可选，写给模型的触发条件' }, h(Input, {
+              h(Field, { key: 'w', label: t('field.when'), hint: t('field.when.hint') }, h(Input, {
                 value: editor.whenToUse,
-                placeholder: '用户要求处理 PDF 时',
-                'aria-label': '触发条件',
+                placeholder: t('field.when.placeholder'),
+                'aria-label': t('field.when.label'),
                 onChange: (event) => update({ whenToUse: event.target.value }),
               })),
             ]),
             h(Field, {
               key: 'd',
-              label: '说明',
+              label: t('field.description'),
               required: true,
-              counter: `${longFields} 字`,
-              hint: '模型只靠这句话判断要不要加载这个技能，写清楚它能做什么。',
+              counter: t('field.description.count', { n: longFields }),
+              hint: t('field.description.hint'),
             }, h('textarea', {
               className: 'acap-textarea',
               value: editor.description,
               rows: 3,
-              'aria-label': '技能说明',
-              placeholder: '把 PDF 逐页导成图片，并抽出其中的表格。',
+              'aria-label': t('field.description.label'),
+              placeholder: t('field.description.placeholder'),
               onChange: (event) => update({ description: event.target.value }),
             })),
-            h(Field, { key: 'b', label: '正文', hint: '加载技能时读到的 Markdown，可以在目录里放资源文件再引用。' }, h('textarea', {
+            h(Field, { key: 'b', label: t('field.body'), hint: t('field.body.hint') }, h('textarea', {
               className: 'acap-textarea acap-textarea-mono acap-textarea-body',
               value: editor.content,
-              'aria-label': '技能正文',
-              placeholder: '## 步骤\n\n1. 用 pdfinfo 确认页数…',
+              'aria-label': t('field.body.label'),
+              placeholder: t('field.body.placeholder'),
               onChange: (event) => update({ content: event.target.value }),
             })),
             h('div', { key: 'togs', className: 'acap-toggle-row' }, [
               h('div', { key: 'm', className: 'acap-toggle' }, [
-                h(Switch, { key: 's', checked: editor.modelInvocable !== false, label: '允许模型自动加载', onChange: (next) => update({ modelInvocable: next }) }),
+                h(Switch, { key: 's', checked: editor.modelInvocable !== false, label: t('toggle.model'), onChange: (next) => update({ modelInvocable: next }) }),
                 h('span', { key: 't', className: 'acap-toggle-text' }, [
-                  h('span', { key: 'a', className: 'acap-toggle-title' }, '允许模型自动加载'),
-                  h('span', { key: 'b', className: 'acap-note' }, '关掉后只在 / 命令里出现'),
+                  h('span', { key: 'a', className: 'acap-toggle-title' }, t('toggle.model')),
+                  h('span', { key: 'b', className: 'acap-note' }, t('toggle.model.hint')),
                 ]),
               ]),
               h('div', { key: 'u', className: 'acap-toggle' }, [
-                h(Switch, { key: 's', checked: editor.userInvocable !== false, label: '允许用户用 / 命令调用', onChange: (next) => update({ userInvocable: next }) }),
+                h(Switch, { key: 's', checked: editor.userInvocable !== false, label: t('toggle.user'), onChange: (next) => update({ userInvocable: next }) }),
                 h('span', { key: 't', className: 'acap-toggle-text' }, [
-                  h('span', { key: 'a', className: 'acap-toggle-title' }, '允许 / 命令调用'),
-                  h('span', { key: 'b', className: 'acap-note' }, '关掉后输入框里不出现它'),
+                  h('span', { key: 'a', className: 'acap-toggle-title' }, t('toggle.user.title')),
+                  h('span', { key: 'b', className: 'acap-note' }, t('toggle.user.hint')),
                 ]),
               ]),
             ]),
-            editor.mode === 'create' ? h(Field, { key: 'f', label: '存放形式', hint: FORMS.find((row) => row.value === form)?.hint }, h(Segmented, {
+            editor.mode === 'create' ? h(Field, { key: 'f', label: t('field.form'), hint: t(FORMS.find((row) => row.value === form)?.hintKey) }, h(Segmented, {
               id: 'acap-skill-form',
               value: form,
               options: FORMS,
-              label: '存放形式',
+              label: t('field.form'),
               onChange: (next) => update({ form: next }),
             })) : null,
             editor.error === '' ? null : h(Notice, { key: 'e', tone: 'error' }, editor.error),
           ]),
           h('div', { key: 'r', className: 'acap-side' }, [
             h('div', { key: 'p', className: 'acap-preview' }, [
-              h('div', { key: 'h', className: 'acap-preview-head' }, '将写入'),
+              h('div', { key: 'h', className: 'acap-preview-head' }, t('field.willWrite')),
               h('span', { key: 'p', className: 'acap-preview-path', title: path }, shortenPath(path, 40)),
               h('pre', { key: 'pre', className: 'acap-pre' }, skillDocument(editor)),
-              (editor.resources ?? []).length === 0 ? null : h('div', { key: 'res', className: 'acap-preview-head' }, ['目录里还有', ...(editor.resources ?? []).slice(0, 4).map((row) => h('span', { key: row.name, className: 'acap-preview-chip' }, row.name))]),
+              (editor.resources ?? []).length === 0 ? null : h('div', { key: 'res', className: 'acap-preview-head' }, [t('field.alsoInDir'), ...(editor.resources ?? []).slice(0, 4).map((row) => h('span', { key: row.name, className: 'acap-preview-chip' }, row.name))]),
             ]),
             h(Points, {
               key: 'pts',
               rows: [
-                `保存之后，${this.anchorText()}的技能目录里立刻能读到它。`,
-                '模型只读名称、说明和触发条件，正文在真正加载时才读。',
-                '把技能停用只是把它藏起来，磁盘上的文件不会被改动。',
+                t('points.saved', { anchor: this.anchorText() }),
+                t('points.modelReads'),
+                t('points.hideOnly'),
               ],
             }),
           ]),
@@ -2123,22 +2801,22 @@ window.__ModuleLoader__.load({
               key: 'k',
               value: row.key,
               placeholder: kind === 'env' ? 'API_KEY' : 'Authorization',
-              'aria-label': `第 ${index + 1} 条的键`,
+              'aria-label': t('field.pair.key', { n: index + 1 }),
               onChange: (event) => setRow(index, { key: event.target.value }),
             }),
             h(Input, {
               key: 'v',
               value: row.value,
               placeholder: kind === 'env' ? 'sk-…' : 'Bearer …',
-              'aria-label': `第 ${index + 1} 条的值`,
+              'aria-label': t('field.pair.value', { n: index + 1 }),
               onChange: (event) => setRow(index, { value: event.target.value }),
             }),
             h('button', {
               key: 'x',
               type: 'button',
               className: 'acap-icon-btn acap-pair-drop',
-              'aria-label': `删除第 ${index + 1} 条`,
-              title: '删除这一条',
+              'aria-label': t('field.pair.drop', { n: index + 1 }),
+              title: t('field.pair.drop.title'),
               disabled: list.length === 1,
               onClick: () => patch(list.filter((_row, position) => position !== index)),
             }, icon(IconClose, { size: 13 })),
@@ -2149,7 +2827,7 @@ window.__ModuleLoader__.load({
               size: 'sm',
               icon: icon(IconPlus, {}),
               onClick: () => patch([...list, pairRow()]),
-            }, kind === 'env' ? '添加变量' : '添加请求头')),
+            }, kind === 'env' ? t('field.pair.addEnv') : t('field.pair.addHeader'))),
         ])
       }
 
@@ -2160,94 +2838,94 @@ window.__ModuleLoader__.load({
         const transport = TRANSPORTS.find((row) => row.value === server.transport)
         return h(Sheet, {
           key: 'server-editor',
-          title: editor.mode === 'create' ? '添加 MCP 服务器' : `编辑 ${server.name}`,
-          subtitle: '连接成功后，工具会以 mcp__名称__ 前缀出现，模型按需调用。',
+          title: editor.mode === 'create' ? t('serverEditor.create') : t('editor.edit', { name: server.name }),
+          subtitle: t('serverEditor.sub'),
           onClose: () => this.onChange({ serverEditor: undefined }),
           footer: h(React.Fragment, null, [
-            h('span', { key: 'h', className: 'acap-sheet-hint' }, `写入范围 · ${this.anchorText()}`),
+            h('span', { key: 'h', className: 'acap-sheet-hint' }, t('serverEditor.scope', { anchor: this.anchorText() })),
             h('span', { key: 'g', className: 'acap-grow' }),
-            h(Button, { key: 'c', variant: 'outline', size: 'sm', disabled: editor.busy !== '', onClick: () => this.onChange({ serverEditor: undefined }) }, '取消'),
-            h(Button, { key: 's', variant: 'primary', size: 'sm', disabled: editor.busy !== '', onClick: () => this.submitServerEditor() }, editor.busy === '' ? '保存' : editor.busy),
+            h(Button, { key: 'c', variant: 'outline', size: 'sm', disabled: editor.busy !== '', onClick: () => this.onChange({ serverEditor: undefined }) }, t('editor.cancel')),
+            h(Button, { key: 's', variant: 'primary', size: 'sm', disabled: editor.busy !== '', onClick: () => this.submitServerEditor() }, editor.busy === '' ? t('editor.save') : editor.busy),
           ]),
         }, h('div', { className: 'acap-edit' }, [
           h('div', { key: 'l', className: 'acap-edit-col' }, [
             h('div', { key: 'pair', className: 'acap-edit-pair' }, [
-              h(Field, { key: 'n', label: '名称', required: true, hint: '随便起名，中文也行；重名会被更靠近的范围遮住' }, h(Input, {
+              h(Field, { key: 'n', label: t('field.serverName'), required: true, hint: t('field.serverName.hint') }, h(Input, {
                 value: server.name,
                 placeholder: 'playwright',
-                'aria-label': '服务器名称',
+                'aria-label': t('field.serverName.label'),
                 onChange: (event) => update({ name: event.target.value }),
               })),
-              h(Field, { key: 't', label: '连接方式', hint: transport?.hint }, h(Segmented, {
+              h(Field, { key: 't', label: t('field.transport'), hint: t(transport?.hintKey) }, h(Segmented, {
                 id: 'acap-server-transport',
                 value: server.transport,
                 options: TRANSPORTS,
-                label: '连接方式',
+                label: t('field.transport'),
                 onChange: (next) => update({ transport: next }),
               })),
             ]),
             server.transport === 'stdio' ? h(Field, {
               key: 'cmd',
-              label: '命令',
+              label: t('field.command'),
               required: true,
-              hint: '相对路径按工作目录解析。',
+              hint: t('field.command.hint'),
             }, h(Input, {
               value: server.command,
               placeholder: 'node',
-              'aria-label': '启动命令',
+              'aria-label': t('field.command.label'),
               onChange: (event) => update({ command: event.target.value }),
             })) : h(Field, {
               key: 'url',
-              label: '地址',
+              label: t('field.url'),
               required: true,
-              hint: '已经跑起来的服务器，例如 http://127.0.0.1:8931/mcp',
+              hint: t('field.url.hint'),
             }, h(Input, {
               value: server.url,
               placeholder: 'http://127.0.0.1:8931/mcp',
-              'aria-label': '服务器地址',
+              'aria-label': t('field.url.label'),
               onChange: (event) => update({ url: event.target.value }),
             })),
             server.transport === 'stdio' ? h(Field, {
               key: 'args',
-              label: '参数',
-              counter: `${(textToArgs(editor.argsText) ?? []).length} 个`,
-              hint: '一行一个，直接交给进程，不经过 shell。',
+              label: t('field.args'),
+              counter: t('field.args.count', { n: (textToArgs(editor.argsText) ?? []).length }),
+              hint: t('field.args.hint'),
             }, h('textarea', {
               className: 'acap-textarea acap-textarea-mono',
               rows: 3,
               value: editor.argsText,
-              'aria-label': '命令参数',
+              'aria-label': t('field.args.label'),
               placeholder: 'server.mjs',
               onChange: (event) => this.onChange({ serverEditor: { ...this.state.serverEditor, argsText: event.target.value } }),
             })) : null,
-            server.transport === 'stdio' ? h(Field, { key: 'cwd', label: '工作目录', hint: '进程从这里启动，留空用宿主的工作目录' }, h('div', { className: 'acap-select-row' }, [
+            server.transport === 'stdio' ? h(Field, { key: 'cwd', label: t('field.cwd'), hint: t('field.cwd.hint') }, h('div', { className: 'acap-select-row' }, [
               h(Input, {
                 key: 'i',
                 value: server.cwd,
                 placeholder: '/Users/me/project',
-                'aria-label': '工作目录',
+                'aria-label': t('field.cwd.label'),
                 onChange: (event) => update({ cwd: event.target.value }),
               }),
-              h(Button, { key: 'p', variant: 'ghost', size: 'sm', icon: icon(IconFolder, {}), onClick: () => void this.openPicker(server.cwd === '' ? this.state.view?.defaults?.home : server.cwd, 'server-cwd') }, '选择'),
+              h(Button, { key: 'p', variant: 'ghost', size: 'sm', icon: icon(IconFolder, {}), onClick: () => void this.openPicker(server.cwd === '' ? this.state.view?.defaults?.home : server.cwd, 'server-cwd') }, t('field.cwd.pick')),
             ])) : null,
             h(Field, {
               key: 'env',
-              label: server.transport === 'stdio' ? '环境变量' : '请求头',
-              hint: server.transport === 'stdio' ? '逐条列出，会加到子进程的环境里。' : '逐条列出，随每次请求发出。值里可以有等号。',
+              label: server.transport === 'stdio' ? t('field.env') : t('field.header'),
+              hint: server.transport === 'stdio' ? t('field.env.hint') : t('field.header.hint'),
             }, this.renderPairs(server.transport === 'stdio' ? 'env' : 'header', server.transport === 'stdio' ? editor.envRows : editor.headerRows)),
             editor.error === '' ? null : h(Notice, { key: 'e', tone: 'error' }, editor.error),
           ]),
           h('div', { key: 'r', className: 'acap-side' }, [
             h('div', { key: 'p', className: 'acap-preview' }, [
-              h('div', { key: 'h', className: 'acap-preview-head' }, ['挂载参数']),
+              h('div', { key: 'h', className: 'acap-preview-head' }, [t('preview.mount')]),
               h('pre', { key: 'pre', className: 'acap-pre' }, mcpConfigPreview({ ...server, args: textToArgs(editor.argsText), env: rowsToPairs(editor.envRows).pairs, headers: rowsToPairs(editor.headerRows).pairs })),
             ]),
             h(Points, {
               key: 'pts',
               rows: [
-                `工具名会带上 mcp__${mountNameOf(server.name)}__ 前缀。`,
-                `只挂到${this.anchorText()}，别的范围看不到这些工具。`,
-                server.transport === 'stdio' ? '保存后立刻启动进程，停用或删除时进程一起退出。' : '保存后立刻连上去，删掉就断开。',
+                t('points.toolPrefix', { name: mountNameOf(server.name) }),
+                t('points.scopeOnly', { anchor: this.anchorText() }),
+                server.transport === 'stdio' ? t('points.stdioLive') : t('points.httpLive'),
               ],
             }),
           ]),
@@ -2257,17 +2935,17 @@ window.__ModuleLoader__.load({
       renderPicker() {
         const picker = this.state.picker
         const purpose = picker.purpose
-        const title = purpose === 'project' ? '选择项目目录' : purpose === 'server-cwd' ? '选择工作目录' : '添加技能目录'
+        const title = purpose === 'project' ? t('picker.project') : purpose === 'server-cwd' ? t('picker.cwd') : t('picker.source')
         return h(Sheet, {
           key: 'picker',
           title,
-          subtitle: purpose === 'project' ? '选中之后，这一页会扫描该项目里各个 Agent 的技能目录。' : '选中之后，这个目录会被当作一个技能来源添加进来。',
+          subtitle: purpose === 'project' ? t('picker.project.sub') : t('picker.source.sub'),
           small: false,
           onClose: () => this.onChange({ picker: undefined }),
           footer: h(React.Fragment, null, [
             h('span', { key: 'h', className: 'acap-sheet-hint', title: picker.path }, shortenPath(picker.path, 52)),
             h('span', { key: 'g', className: 'acap-grow' }),
-            h(Button, { key: 'c', variant: 'outline', size: 'sm', onClick: () => this.onChange({ picker: undefined }) }, '取消'),
+            h(Button, { key: 'c', variant: 'outline', size: 'sm', onClick: () => this.onChange({ picker: undefined }) }, t('confirm.cancel')),
             h(Button, {
               key: 'ok',
               variant: 'primary',
@@ -2280,7 +2958,7 @@ window.__ModuleLoader__.load({
                 }
                 void this.pickDirectory(picker.path)
               },
-            }, purpose === 'server-cwd' ? '用这个目录' : purpose === 'project' ? '扫描这个项目' : '添加这个目录'),
+            }, purpose === 'server-cwd' ? t('picker.use') : purpose === 'project' ? t('picker.scan') : t('picker.add')),
           ]),
         }, h('div', { className: 'acap-picker' }, [
           h('div', { key: 'bar', className: 'acap-picker-bar' }, [
@@ -2290,14 +2968,14 @@ window.__ModuleLoader__.load({
               size: 'sm',
               disabled: picker.parent === '' || picker.loading === true,
               onClick: () => void this.loadDir(picker.parent),
-            }, '上一层'),
+            }, t('picker.up')),
             h('span', { key: 'p', className: 'acap-picker-path', title: picker.path }, picker.path),
           ]),
           picker.error === '' ? null : h(Notice, { key: 'e', tone: 'warn' }, picker.error),
           h('div', { key: 'l', className: 'acap-picker-list' }, picker.loading === true
-            ? h('div', { className: 'acap-note', style: { padding: 6 } }, '正在读取…')
+            ? h('div', { className: 'acap-note', style: { padding: 6 } }, t('catalog.loading'))
             : (picker.entries ?? []).length === 0
-              ? h('div', { className: 'acap-note', style: { padding: 6 } }, '这里没有子目录。')
+              ? h('div', { className: 'acap-note', style: { padding: 6 } }, t('picker.empty'))
               : (picker.entries ?? []).map((entry) => h('button', {
                 key: entry.path,
                 type: 'button',
@@ -2317,7 +2995,7 @@ window.__ModuleLoader__.load({
           onClose: () => this.onChange({ confirm: undefined }),
           footer: h(React.Fragment, null, [
             h('span', { key: 'g', className: 'acap-grow' }),
-            h(Button, { key: 'c', variant: 'outline', size: 'sm', disabled: confirm.busy === true, onClick: () => this.onChange({ confirm: undefined }) }, '取消'),
+            h(Button, { key: 'c', variant: 'outline', size: 'sm', disabled: confirm.busy === true, onClick: () => this.onChange({ confirm: undefined }) }, t('confirm.cancel')),
             h(Button, {
               key: 'k',
               variant: 'primary',
@@ -2345,17 +3023,20 @@ window.__ModuleLoader__.load({
     class PluginSettings extends React.Component {
       constructor(props) {
         super(props === undefined || props === null ? {} : props)
-        this.state = { loading: true, error: '', prefs: undefined, busy: '' }
+        this.state = { loading: true, error: '', prefs: undefined, busy: '', localeRev: localeRevision }
         this.mounted = false
       }
 
       componentDidMount() {
         this.mounted = true
+        this.watch = () => this.patch({ localeRev: localeRevision })
+        localeListeners.add(this.watch)
         void this.load()
       }
 
       componentWillUnmount() {
         this.mounted = false
+        localeListeners.delete(this.watch)
       }
 
       get api() {
@@ -2368,7 +3049,7 @@ window.__ModuleLoader__.load({
 
       async call(method, input = undefined) {
         const api = this.api
-        if (api === undefined || typeof api[method] !== 'function') return { error: '宿主的技能与 MCP 管理插件没有加载' }
+        if (api === undefined || typeof api[method] !== 'function') return { error: t('note.noApi') }
         try {
           return unwrap(input === undefined ? await api[method]() : await api[method](input))
         } catch (error) {
@@ -2398,22 +3079,22 @@ window.__ModuleLoader__.load({
           return
         }
         syncShell(prefs)
-        notify(value ? '已经把它加到这个位置' : '已经把这个入口收起来')
+        notify(value ? t('note.placed') : t('note.unplaced'))
       }
 
       render() {
         try {
-          if (this.state.loading === true) return h('div', { className: 'acap-note' }, '正在读取设置…')
+          if (this.state.loading === true) return h('div', { className: 'acap-note' }, t('settings.loading'))
           if (this.state.error !== '') return h(Notice, { tone: 'error' }, this.state.error)
           const prefs = this.state.prefs ?? {}
           const places = [
-            { key: 'sidebarSkills', label: '主页左边栏：SKILL', hint: '主页左边多一个图标，点开就是整页的 SKILL 管理' },
-            { key: 'sidebarMcp', label: '主页左边栏：MCP', hint: '主页左边多一个图标，点开就是整页的 MCP 管理' },
-            { key: 'tabSkills', label: '对话页顶部 tab：skill', hint: '每条对话的上方多一个 skill 页，管的就是这条会话' },
-            { key: 'tabMcp', label: '对话页顶部 tab：mcp', hint: '每条对话的上方多一个 mcp 页，管的就是这条会话' },
+            { key: 'sidebarSkills', label: t('places.sidebarSkills'), hint: t('places.sidebarSkills.hint') },
+            { key: 'sidebarMcp', label: t('places.sidebarMcp'), hint: t('places.sidebarMcp.hint') },
+            { key: 'tabSkills', label: t('places.tabSkills'), hint: t('places.tabSkills.hint') },
+            { key: 'tabMcp', label: t('places.tabMcp'), hint: t('places.tabMcp.hint') },
           ]
           return h('div', { className: 'acap-scope acap-plugin-settings' }, [
-            h('div', { key: 't', className: 'acap-plugin-title' }, '显示位置'),
+            h('div', { key: 't', className: 'acap-plugin-title' }, t('settings.title')),
             h('div', { key: 'l', className: 'acap-place-list' }, places.map((place) => h('div', {
               key: place.key,
               className: 'acap-place',
@@ -2431,10 +3112,10 @@ window.__ModuleLoader__.load({
                 h('span', { key: 'b', className: 'acap-place-hint' }, place.hint),
               ]),
             ]))),
-            h('div', { key: 'n', className: 'acap-note' }, '改完立刻生效。技能与 MCP 本身在设置里的 SKILL管理、MCP管理两页。'),
+            h('div', { key: 'n', className: 'acap-note' }, t('settings.note')),
           ])
         } catch (error) {
-          console.warn('[skill-mcp-manager] 插件设置面板渲染失败', error)
+          console.warn('[skill-mcp-manager]', t('notice.pluginRender'), error)
           return null
         }
       }
@@ -2448,17 +3129,20 @@ window.__ModuleLoader__.load({
     class ComposerToggles extends React.Component {
       constructor(props) {
         super(props === undefined || props === null ? {} : props)
-        this.state = { open: false, loading: true, error: '', data: undefined, busy: '', tab: 'skill', closed: {} }
+        this.state = { open: false, loading: true, error: '', data: undefined, busy: '', tab: 'skill', closed: {}, localeRev: localeRevision }
         this.mounted = false
       }
 
       componentDidMount() {
         this.mounted = true
+        this.watch = () => this.patch({ localeRev: localeRevision })
+        localeListeners.add(this.watch)
         void this.load()
       }
 
       componentWillUnmount() {
         this.mounted = false
+        localeListeners.delete(this.watch)
       }
 
       get api() {
@@ -2475,7 +3159,7 @@ window.__ModuleLoader__.load({
 
       async call(method, input) {
         const api = this.api
-        if (api === undefined || typeof api[method] !== 'function') return { error: '宿主的技能与 MCP 管理插件没有加载' }
+        if (api === undefined || typeof api[method] !== 'function') return { error: t('note.noApi') }
         try {
           return unwrap(await api[method](input))
         } catch (error) {
@@ -2485,7 +3169,7 @@ window.__ModuleLoader__.load({
 
       async load() {
         if (this.sessionId === '') {
-          this.patch({ loading: false, error: '这条会话还没有标识' })
+          this.patch({ loading: false, error: t('note.noSessionId') })
           return
         }
         const result = await this.call('composerState', { sessionId: this.sessionId })
@@ -2592,7 +3276,7 @@ window.__ModuleLoader__.load({
             'data-changed': changed > 0,
             'data-open': this.state.open === true,
             'aria-expanded': this.state.open === true,
-            title: changed === 0 ? '这一次发送带上的 SKILL 与 MCP' : `这一次发送改动了 ${changed} 项`,
+            title: changed === 0 ? t('composer.chip.hint') : t('composer.chip.changed', { n: changed }),
             onClick: () => {
               this.patch({ open: true, error: '' })
               void this.load()
@@ -2614,7 +3298,7 @@ window.__ModuleLoader__.load({
 
         const bySource = new Map()
         for (const entry of skills) {
-          const key = String(entry.sourceLabel ?? entry.source ?? '其它来源')
+          const key = String(entry.sourceLabel ?? entry.source ?? t('composer.other'))
           const bucket = bySource.get(key)
           if (bucket === undefined) bySource.set(key, [entry])
           else bucket.push(entry)
@@ -2624,14 +3308,14 @@ window.__ModuleLoader__.load({
         const row = (entry, kind) => h('div', { key: `${kind}:${entry.scope}:${entry.name}`, className: 'acap-temp-row', 'data-dropped': entry.effective !== true }, [
           h('div', { key: 'm', className: 'acap-temp-main' }, [
             h('code', { key: 'n', className: 'acap-temp-name' }, entry.name),
-            h('span', { key: 's', className: 'acap-temp-scope' }, SCOPE_LABEL[entry.scope] ?? entry.scope),
-            entry.off === true ? h(Tag, { key: 'x', tone: 'warn' }, '这一次不带') : entry.forced === true ? h(Tag, { key: 'f', tone: 'on' }, '这一次带上') : null,
+            h('span', { key: 's', className: 'acap-temp-scope' }, t(SCOPE_LABEL_KEY[entry.scope] ?? entry.scope)),
+            entry.off === true ? h(Tag, { key: 'x', tone: 'warn' }, t('composer.tag.off')) : entry.forced === true ? h(Tag, { key: 'f', tone: 'on' }, t('composer.tag.on')) : null,
           ]),
           h('div', { key: 'a', className: 'acap-temp-actions' }, [
             h(Switch, {
               key: 'sw',
               checked: entry.effective === true,
-              label: `${entry.name} 这一次是否带上`,
+              label: t('composer.row.label', { name: entry.name }),
               disabled: this.state.busy !== '',
               onChange: (next) => void this.flip(kind, entry.name, next),
             }),
@@ -2640,36 +3324,38 @@ window.__ModuleLoader__.load({
 
         return h(Sheet, {
           key: 'sheet',
-          title: '这一次发送带上什么',
-          subtitle: '这里的开关只管这一条会话，优先级高于项目与全局。回合结束就恢复原样。',
+          title: t('composer.title'),
+          subtitle: t('composer.sub'),
           medium: true,
           onClose: () => this.patch({ open: false }),
           footer: h(React.Fragment, null, [
-            h('span', { key: 'c', className: 'acap-sheet-count' }, changed === 0 ? '这一次没有改动' : `这一次改动了 ${changed} 项`),
+            h('span', { key: 'c', className: 'acap-sheet-count' }, changed === 0 ? t('composer.none') : t('composer.count', { n: changed })),
             h('span', { key: 'g', className: 'acap-grow' }),
-            h(Button, { key: 'r', variant: 'ghost', size: 'sm', disabled: this.state.busy !== '' || changed === 0, onClick: () => void this.reset() }, '全部恢复'),
-            h(Button, { key: 'c2', variant: 'outline', size: 'sm', onClick: () => this.patch({ open: false }) }, '关闭'),
+            h(Button, { key: 'r', variant: 'ghost', size: 'sm', disabled: this.state.busy !== '' || changed === 0, onClick: () => void this.reset() }, t('composer.reset')),
+            h(Button, { key: 'c2', variant: 'outline', size: 'sm', onClick: () => this.patch({ open: false }) }, t('composer.close')),
           ]),
         }, this.state.loading === true
-          ? h('div', { className: 'acap-note' }, '正在读取这条会话…')
+          ? h('div', { className: 'acap-note' }, t('note.readingSession'))
           : this.state.error !== ''
             ? h(Notice, { tone: 'error' }, this.state.error)
             : h(React.Fragment, null, [
               h('div', { key: 'tabs', className: 'acap-temp-tabs' }, h(Segmented, {
-                id: 'acap-temp-tabs',
+                // The tab's accessible name is its id, so the id carries the meaning.
+                id: 'carry',
+                label: t('composer.tabs.label'),
                 value: this.state.tab === 'server' ? 'server' : 'skill',
                 options: [
-                  { value: 'skill', label: `技能 ${skills.length}` },
-                  { value: 'server', label: `MCP ${servers.length}` },
+                  { value: 'skill', label: t('composer.tab.skill', { n: skills.length }) },
+                  { value: 'server', label: t('composer.tab.server', { n: servers.length }) },
                 ],
                 onChange: (next) => this.patch({ tab: next }),
               })),
               this.state.tab === 'server'
                 ? servers.length === 0
-                  ? h('div', { key: 'me', className: 'acap-note' }, '这条会话还没有 MCP 服务器。去 mcp 页加一个。')
+                  ? h('div', { key: 'me', className: 'acap-note' }, t('composer.empty.server'))
                   : h('div', { key: 'ml', className: 'acap-temp-list' }, servers.map((entry) => row(entry, 'server')))
                 : skills.length === 0
-                  ? h('div', { key: 'se', className: 'acap-note' }, '这条会话还没有能带上的技能。')
+                  ? h('div', { key: 'se', className: 'acap-note' }, t('composer.empty.skill'))
                   : h('div', { key: 'sl', className: 'acap-temp-list' }, groups.map((group) => {
                     const stopped = group.rows.every((entry) => entry.effective !== true && entry.off !== true)
                     const dropped = group.rows.filter((entry) => entry.effective !== true).length
@@ -2682,8 +3368,8 @@ window.__ModuleLoader__.load({
                         h(Switch, {
                           key: 'all',
                           checked: allOn,
-                          label: `${group.key} 这一次全部带上`,
-                          title: allOn ? `这一次不带 ${group.key} 的全部技能` : `这一次带上 ${group.key} 的全部技能`,
+                          label: t('composer.group.all', { label: group.key }),
+                          title: allOn ? t('composer.group.drop', { label: group.key }) : t('composer.group.keep', { label: group.key }),
                           disabled: this.state.busy !== '',
                           onChange: (next) => void this.flipGroup('skill', group.rows, next),
                         }),
@@ -2697,9 +3383,9 @@ window.__ModuleLoader__.load({
                           h('span', { key: 'i', className: shut === true ? 'acap-caret' : 'acap-caret acap-caret-open' }, icon(IconChevron, {})),
                           h(Mark, { key: 'mk', source: { id: group.id, label: group.key } }),
                           h('span', { key: 'n', className: 'acap-temp-group-name' }, group.key),
-                          h('span', { key: 'c', className: 'acap-temp-count' }, `${group.rows.length} 个`),
-                          dropped === 0 ? null : h('span', { key: 'd', className: 'acap-temp-group-hint' }, `这一次不带 ${dropped} 个`),
-                          stopped ? h('span', { key: 'o', className: 'acap-temp-group-hint' }, '这个来源在记录里是停用的') : null,
+                          h('span', { key: 'c', className: 'acap-temp-count' }, t('composer.group.count', { n: group.rows.length })),
+                          dropped === 0 ? null : h('span', { key: 'd', className: 'acap-temp-group-hint' }, t('composer.group.dropCount', { n: dropped })),
+                          stopped ? h('span', { key: 'o', className: 'acap-temp-group-hint' }, t('composer.group.stopped')) : null,
                           h('span', { key: 'g', className: 'acap-grow' }),
                         ]),
                       ]),
@@ -2710,7 +3396,7 @@ window.__ModuleLoader__.load({
       }
     }
 
-    const inject = ['slots', 'remote']
+    const inject = ['slots', 'remote', 'locale']
     let capturedApi
 
     const apply = async (ctx) => {
@@ -2720,12 +3406,26 @@ window.__ModuleLoader__.load({
         styleElement = undefined
       }, 'skill and mcp manager styles')
 
+      // The two tables live in this bundle; the locale service owns which one is read
+      // and tells every subscriber when the language changes, so the pages redraw.
+      const bindLanguage = () => {
+        table = ctx.locale.getLocale() === 'zh' ? zh : en
+        t = ctx.locale.bind(LOCALE_NS)
+      }
+      bindLanguage()
+      ctx.effect(() => ctx.locale.register(LOCALE_NS, { zh, en }))
+      ctx.effect(() => ctx.locale.subscribe(() => {
+        bindLanguage()
+        watchLocale()
+        syncShell(localePrefs)
+      }))
+
       // The remote namespace only exists once the mount settles; registering the page
       // before that would hand every visitor an empty api and no way to recover.
       await ctx.remote.$mount(RPC_REMOTE)
       capturedApi = ctx.get('remote.skillMcpManager')
       if (capturedApi === undefined) {
-        throw new Error('远程服务 skillMcpManager 没有挂上：宿主的 skill-mcp-manager 插件没有加载')
+        throw new Error(t('notice.remoteMissing'))
       }
 
       // 斜杠菜单的技能目录由 dsh-client-ui-skill 按会话缓存，它只在 plugin-manager/changed
@@ -2755,7 +3455,7 @@ window.__ModuleLoader__.load({
         name: 'settings.section',
         id: `${NS}-skills`,
         order: 23,
-        label: () => 'SKILL管理',
+        label: () => t('title.skills'),
         inject: () => ({ api: capturedApi, page: 'skills' }),
       }, ManagerPage))
 
@@ -2763,7 +3463,7 @@ window.__ModuleLoader__.load({
         name: 'settings.section',
         id: `${NS}-mcp`,
         order: 24,
-        label: () => 'MCP管理',
+        label: () => t('title.mcp'),
         inject: () => ({ api: capturedApi, page: 'mcp' }),
       }, ManagerPage))
 
@@ -2773,18 +3473,19 @@ window.__ModuleLoader__.load({
         name: 'conversation.input.left',
         id: NS,
         order: 40,
-        label: () => '这一次发送带上什么',
+        label: () => t('composer.title'),
         inject: (sessionId) => ({ api: capturedApi, sessionId }),
       }, ComposerToggles))
 
       // Everything else is optional and follows the place switches in the page.
+      let localePrefs = {}
       const handles = []
       const clear = () => {
         for (const dispose of handles.splice(0)) {
           try {
             dispose()
           } catch (error) {
-            console.warn('[skill-mcp-manager] 收起入口失败', error)
+            console.warn('[skill-mcp-manager]', t('notice.foldFailed'), error)
           }
         }
       }
@@ -2792,21 +3493,22 @@ window.__ModuleLoader__.load({
         handles.push(ctx.slots.inject(key, () => ctx.slots.register(options, component)))
       }
       syncShell = (prefs) => {
+        localePrefs = prefs ?? {}
         clear()
         const on = (key) => prefs?.[key] === true
         if (on('sidebarSkills')) {
-          add('sidebar.panellist', { name: 'sidebar.panellist', id: PANEL_SKILLS, order: 40, label: () => 'SKILL管理' }, SkillsPanelIcon)
+          add('sidebar.panellist', { name: 'sidebar.panellist', id: PANEL_SKILLS, order: 40, label: () => t('title.skills') }, SkillsPanelIcon)
           add('main', { name: 'main', key: PANEL_SKILLS, inject: () => ({ api: capturedApi, page: 'skills' }) }, ManagerPage)
         }
         if (on('sidebarMcp')) {
-          add('sidebar.panellist', { name: 'sidebar.panellist', id: PANEL_MCP, order: 41, label: () => 'MCP管理' }, ServersPanelIcon)
+          add('sidebar.panellist', { name: 'sidebar.panellist', id: PANEL_MCP, order: 41, label: () => t('title.mcp') }, ServersPanelIcon)
           add('main', { name: 'main', key: PANEL_MCP, inject: () => ({ api: capturedApi, page: 'mcp' }) }, ManagerPage)
         }
         if (on('tabSkills')) {
-          add('conversation.view', { name: 'conversation.view', id: `${NS}-skills`, order: 40, label: () => 'skill', inject: (sessionId) => ({ api: capturedApi, page: 'skills', sessionId }) }, ManagerPage)
+          add('conversation.view', { name: 'conversation.view', id: `${NS}-skills`, order: 40, label: () => t('label.skill'), inject: (sessionId) => ({ api: capturedApi, page: 'skills', sessionId }) }, ManagerPage)
         }
         if (on('tabMcp')) {
-          add('conversation.view', { name: 'conversation.view', id: `${NS}-mcp`, order: 41, label: () => 'mcp', inject: (sessionId) => ({ api: capturedApi, page: 'mcp', sessionId }) }, ManagerPage)
+          add('conversation.view', { name: 'conversation.view', id: `${NS}-mcp`, order: 41, label: () => t('label.mcp'), inject: (sessionId) => ({ api: capturedApi, page: 'mcp', sessionId }) }, ManagerPage)
         }
       }
 
@@ -2816,7 +3518,7 @@ window.__ModuleLoader__.load({
         syncShell(prefs?.prefs ?? {})
       } catch (error) {
         syncShell({})
-        console.warn('[skill-mcp-manager] 读取显示位置失败，先不插入可选入口', error)
+        console.warn('[skill-mcp-manager]', t('notice.prefsFailed'), error)
       }
 
       ctx.effect(() => () => {

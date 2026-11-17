@@ -142,6 +142,9 @@ for (const [index, method] of RPC_ENDPOINTS.entries()) {
   delete globalThis.window
 
   const client = text('lib/client.js')
+  assert.equal(client.includes("ctx.locale.register(LOCALE_NS, { zh, en })"), true, '两种语言的词条要注册到 locale 服务，否则语言一换这里还是旧语言')
+  assert.equal(client.includes("ctx.locale.bind(LOCALE_NS)"), true, '取词条要走 locale 服务，跟随界面语言')
+  assert.equal(client.includes('localeListeners.add('), true, '语言变化要通知页面重画，否则要点一次刷新才看得到')
   assert.equal(client.includes('settings.section'), true)
   const decoded = client
     .replace(/\\u([0-9a-fA-F]{4})/gu, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
@@ -227,6 +230,28 @@ for (const [index, method] of RPC_ENDPOINTS.entries()) {
   assert.equal(icon.includes('<svg'), true, '图标要是一份 SVG')
   assert.equal(Buffer.byteLength(icon, 'utf8') <= 256 * 1024, true, '图标不能超过 256 KiB')
   assert.equal(icon.includes('</svg>'), true)
+}
+
+// ── the locale files reach the host and the plugin detail page ─────────────
+
+{
+  const manifest = JSON.parse(text('package.json'))
+  // The host reads <package>/locale/<language>.json to name the plugin in the list,
+  // so the directory has to be in the tarball and importable by path.
+  assert.equal(manifest.files.includes('locale'), true, 'locale 目录要跟着包发布')
+  assert.equal(manifest.files.includes('README_EN.md'), true, '英文说明要跟着包发布')
+  assert.equal(manifest.exports['./locale/*.json'], './locale/*.json')
+  for (const [language, key] of [['zh', 'zh'], ['en', 'en']]) {
+    const meta = JSON.parse(text(`locale/${language}.json`)).meta
+    assert.equal(meta.title.length > 0, true, `locale/${language}.json 要有 meta.title`)
+    assert.equal(meta.description.length > 0, true, `locale/${language}.json 要有 meta.description`)
+    // The detail page reads the Markdown this points at; a path outside the package
+    // or one that is missing leaves the page with the README instead.
+    assert.equal(meta.detail.endsWith('.md'), true, `${key} 的详情要指一份 Markdown`)
+    assert.equal(meta.detail.startsWith('docs/'), true, `${key} 的详情要在包内`)
+    assert.equal(text(meta.detail).length > 200, true, `${key} 的详情页要有内容`)
+    assert.equal(manifest.files.includes(meta.detail), true, `${meta.detail} 要跟着包发布`)
+  }
 }
 
 console.log(`remote: ${assertions} assertions passed`)

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "SKILL 与 MCP 管理",
+    "description": "按全局、项目、会话三层管理技能与 MCP 服务器：增删改查、来源目录、逐项与整组开关、这一次发送的临时开关。",
+    "detail": "docs/plugin-zh.md"
+  }
+}
