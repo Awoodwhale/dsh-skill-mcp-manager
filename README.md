@@ -284,7 +284,9 @@ npm run typecheck
 1. 改 `package.json` 的 `version`，在 `CHANGELOG.md` 里写一段，提交。
 2. `gh release create v<版本> --title v<版本> --notes "<那一段>"`。
 
-工作流会先校验 tag 与 `package.json` 的版本一致，再跑构建、生成物比对、类型检查与测试，最后 `npm publish --access public --provenance`。版本号对不上或测试不过都会停在发布之前。
+工作流会先校验 tag 与 `package.json` 的版本一致，再跑构建、生成物比对、类型检查与测试，升级 npm 之后才发布（Trusted Publishing 要求 npm CLI 11.5.1 以上，runner 上 Node 22 自带的是 10.x）。带连字符的预发布版本发到 `next`，其余发到 `latest`。版本号对不上或测试不过都会停在发布之前。
+
+也可以手工触发这条工作流，默认只跑构建与 `npm publish --dry-run`，把输入里的 `dry_run` 改成 `false` 才会真的发布。
 
 凭据来自 npm 的 Trusted Publisher：在 npm 上包的 Settings → Trusted Publishing 里填发行方 `Awoodwhale`、仓库 `dsh-skill-mcp-manager`、工作流文件名 `release.yml`，勾上 `Allow npm publish`，此后工作流用 OIDC 现场换发布凭据，仓库里不需要放任何 token。包必须先发布过一次才能绑定，所以第一个版本是手工 `npm publish` 出来的。
 

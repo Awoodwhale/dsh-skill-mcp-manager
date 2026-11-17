@@ -1,42 +1,99 @@
 name: release
 
-# 发一条 GitHub Release 就发一次 npm：版本号取自 tag，去掉前缀 v。
+# 发一条 GitHub Release 就把这个版本发到 npm，凭据由 npm Trusted Publishing（OIDC）现场换取，
+# 仓库里不放任何 token。发出去的 tarball 带 provenance，能看到它是从这个仓库的这次运行构建的。
+#
+# 触发：Release 发布（tag 形如 vX.Y.Z）。tag 必须等于 package.json 的 version，工作流会先校验。
+# dist-tag：带连字符的预发布版本（v0.2.0-rc.1）发到 next，latest 继续指向最后一个稳定版。
+#
+# npm 上的一次性设置（只能在 npmjs.com 手工做）：
+#   1. 包 -> Settings -> Trusted Publishers -> Add Trusted Publisher。
+#   2. Provider 选 GitHub Actions，Organization or user 填 Awoodwhale，
+#      Repository 填 dsh-skill-mcp-manager，Workflow filename 填 release.yml，Environment 留空。
+#   3. 勾上 Allow npm publish 后保存。连接要到第一次发布成功之后才算验证完成；在那之前
+#      这条工作流的 OIDC 换不到权限，npm 会报 E404（看起来像包不存在）。
+# 参考文档：https://docs.npmjs.com/trusted-publishers
+#
+# 关于 npm 版本：Trusted Publishing 要求 npm CLI >= 11.5.1，而 runner 上 Node 22 自带的 npm 是 10.x，
+# 所以发布之前要单独升级 npm。
+#
 # 同一个版本重复发会在 npm 那边报 already published，宁可失败也不要静默跳过。
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 构建与校验全部跑一遍，但不发布
+        type: boolean
+        # 手工点这个按钮默认只做校验：把版本推给所有人之前先看一眼。
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
 
 jobs:
   publish:
+    name: 构建 · 校验 · 发布
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.release.tag_name }}
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
+          cache: npm
 
-      # tag 与 package.json 必须一致，否则装出来的人拿到的版本与页面写的不是一回事。
-      - name: 版本号与 tag 对齐
+      - name: 安装依赖
+        run: npm ci
+
+      # 手工触发时没有 tag 可比，所以只有 Release 触发时才校验版本。
+      - name: 版本号与 tag 一致
+        if: github.event_name == 'release'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          tag="${{ github.event.release.tag_name }}"
-          tag="${tag#v}"
-          pkg="$(node -p "require('./package.json').version")"
-          echo "tag=${tag} package.json=${pkg}"
-          test "${tag}" = "${pkg}" || { echo "tag 与 package.json 的版本不一致" >&2; exit 1; }
+          expected="v$(node -p "require('./package.json').version")"
+          echo "package.json 版本：${expected#v}"
+          echo "Release tag：${RELEASE_TAG}"
+          if [ "${RELEASE_TAG}" != "${expected}" ]; then
+            echo "::error::Release tag ${RELEASE_TAG} 与 package.json 的版本 ${expected#v} 不一致（应为 ${expected}）。"
+            exit 1
+          fi
 
-      - run: npm ci
-      # 生成物、类型、测试在发布前全部再跑一遍；顺手比对构建没有改动仓库里的文件。
-      - run: npm run build
-      - run: git diff --exit-code -- src/remote.ts src/typert.ts src/logos.ts lib/
-      - run: npm run typecheck
-      - run: npm test
+      # 与 ci.yml 同样的门禁、同样的顺序：Release 只能发出一个 Pull Request 也过得了的版本。
+      - name: 构建
+        run: npm run build
 
-      # npm 上的 Trusted Publisher 认这个仓库与这个文件名，凭据由 OIDC 现场换，
-      # 不再需要 NPM_TOKEN。
-      - run: npm publish --access public --provenance
+      - name: 生成物已提交
+        run: git diff --exit-code -- src/remote.ts src/typert.ts src/logos.ts lib/
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: 测试
+        run: npm test
+
+      # Trusted Publishing 要求 npm CLI >= 11.5.1（Node 22 自带 10.x）。
+      - name: 升级 npm
+        run: |
+          npm install -g npm@^11.5.1
+          npm --version
+
+      - name: 试发布（只做校验）
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
+        run: npm publish --dry-run
+
+      - name: 发布到 npm
+        if: github.event_name == 'release' || github.event.inputs.dry_run != 'true'
+        run: |
+          TAG=$(node -p "require('./package.json').version.includes('-') ? 'next' : 'latest'")
+          echo "发布到 npm dist-tag：${TAG}"
+          npm publish --provenance --access public --tag "$TAG"
