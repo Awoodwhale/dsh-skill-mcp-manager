@@ -2,6 +2,16 @@
 
 版本从 0.1.0 重新起算。0.1.0 之后的段落记录首次发布前的开发过程；0.1.0 这一条写的是第一次发布时插件已有的全部能力。
 
+## 0.1.6
+
+- 从 npm 装进 profile 之后插件起不来：`lib/index.js` 顶层静态 import 了 `@deepseek-ai/dsh-typert-protocol`、`@deepseek-ai/dsh-scope`、`@deepseek-ai/dsh-mcp-client`、`@deepseek-ai/schemastery`。这四个包在 profile 里没有，`dsh web` 在加载阶段抛异常，进程既不监听端口也不输出任何内容。现在
+
+  - Typert 的方法标记与服务绑定在本文件内按协议要求的形状写出；
+  - 配置 schema 按 Schemastery 的形状写出，带 standard schema 的 `validate`，设置表单照常能画；
+  - `scopeOf` 与 MCP 客户端在运行时从 dsh 自己的安装里解析，用哪个版本就跟宿主走。
+
+  这四个包同时从 `peerDependencies` 里去掉；留在里面的只剩宿主本来就会提供的那几个。
+
 ## 0.1.5
 
 - 界面支持中英文。设置页的 SKILL 管理、MCP 管理，输入框左下角的 `SKILL·MCP` 弹层，页头的「入口」弹层，侧边栏与对话页标签，都跟着界面语言切换；切换语言后不需要重新打开弹层。

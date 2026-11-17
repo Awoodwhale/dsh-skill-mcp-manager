@@ -216,9 +216,16 @@ for (const [index, method] of RPC_ENDPOINTS.entries()) {
   assert.equal(manifest.dsh.client.platform, 'web')
   assert.equal(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-slots'), true)
   assert.equal(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-api-remotes'), true)
-  for (const peer of ['@deepseek-ai/dsh-skill', '@deepseek-ai/dsh-mcp-client', '@deepseek-ai/dsh-scope', '@deepseek-ai/dsh-agent']) {
+  for (const peer of ['@deepseek-ai/dsh-skill', '@deepseek-ai/dsh-tools', '@deepseek-ai/dsh-agent', '@deepseek-ai/cordis']) {
     assert.equal(typeof manifest.peerDependencies[peer], 'string', `${peer} 要在 peerDependencies 里声明`)
   }
+  // 插件装进 profile 之后，profile 的 node_modules 里只有插件自己；这四个包要在运行时
+  // 从 dsh 的安装里取，声明成 peer 会让 pnpm 在 profile 里装第二份、并且连带缺更多包。
+  for (const borrowed of ['@deepseek-ai/dsh-typert-protocol', '@deepseek-ai/dsh-scope', '@deepseek-ai/dsh-mcp-client', '@deepseek-ai/schemastery']) {
+    assert.equal(manifest.peerDependencies[borrowed], undefined, `${borrowed} 不能声明成 peer 依赖`)
+  }
+  assert.equal(text('lib/index.js').includes('hostModule('), true, '宿主侧的包要用 hostModule 从 dsh 安装里取')
+  assert.equal(/from '@deepseek-ai\/dsh-(typert-protocol|scope|mcp-client)'/.test(text('lib/index.js')), false, '产物里不能静态 import 这四个包')
   const patch = text('cordis.patch.yml')
   assert.equal(patch.includes('id: skill-mcp-manager'), true)
   const rows = YAML.parse(patch)

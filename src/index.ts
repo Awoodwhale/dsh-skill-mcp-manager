@@ -35,10 +35,7 @@
  * new record. A predictable full re-apply rather than a diff engine whose stale cases
  * nobody would notice until a skill went missing.
  */
-import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import { scopeOf } from '@deepseek-ai/dsh-scope'
-import * as McpClient from '@deepseek-ai/dsh-mcp-client'
-import Schema from '@deepseek-ai/schemastery'
+import { Context, Service } from '@deepseek-ai/cordis'
 import { RPC_ENDPOINTS, RPC_SERVICE } from './endpoints.js'
 import {
   closeSync,
@@ -54,6 +51,7 @@ import {
 } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import {
   deleteSkill as deleteSkillDoc,
@@ -86,17 +84,88 @@ import { planCandidates } from './plan.js'
 export const name = 'skill-mcp-manager'
 
 /**
- * Configuration. The defaults live here, the shape is checked when the row loads,
- * and a wrong value fails loudly instead of being ignored.
+ * 配置的默认值与类型检查。宿主只认 Schemastery schema（带 `~standard.validate`、
+ * `Symbol.for('schemastery')` 标记、`type` 与 `meta`），所以这里按同一份形状手写：
+ * 校验走 standard schema 协议，设置表单读 `type`、`meta` 与 `dict`。
  */
-export const Config = Schema.object({
-  /** Where this plugin keeps its store. Empty selects `$DSH_HOME/dsh-skill-mcp-manager/store.json`. */
-  storePath: Schema.string().default(''),
-  /** Mount the dynamic skill providers and MCP rows. Off leaves the page as a pure editor. */
-  mount: Schema.boolean().default(true),
+const fieldOf = (type, fallback) => {
+  const schema = (value) => {
+    if (value === undefined) return fallback
+    if (typeof value !== type) throw new TypeError(`期望 ${type}`)
+    return value
+  }
+  schema.type = type
+  schema.meta = { default: fallback }
+  schema['~standard'] = {
+    version: 1,
+    vendor: 'skill-mcp-manager',
+    validate(value) {
+      try {
+        return { value: schema(value) }
+      } catch (error) {
+        return { issues: [{ message: `${type} 期望，收到 ${typeof value}` }] }
+      }
+    },
+  }
+  schema[Symbol.for('schemastery')] = true
+  return schema
+}
+
+const configFields = {
+  storePath: fieldOf('string', ''),
+  mount: fieldOf('boolean', true),
+}
+
+const validateConfig = (value) => {
+  const input = value === undefined || value === null ? {} : value
+  if (typeof input !== 'object' || Array.isArray(input)) throw new TypeError('配置必须是一个对象')
+  const out = {}
+  for (const [key, field] of Object.entries(configFields)) out[key] = field(input[key])
+  return out
+}
+
+export const Config = Object.assign((value) => validateConfig(value), {
+  type: 'object',
+  meta: { default: {} },
+  dict: configFields,
+  '~standard': {
+    version: 1,
+    vendor: 'skill-mcp-manager',
+    validate(value) {
+      try {
+        return { value: validateConfig(value) }
+      } catch (error) {
+        return { issues: [{ message: errorMessage(error) }] }
+      }
+    },
+  },
+  [Symbol.for('schemastery')]: true,
 })
 
 export const inject = ['skills', 'tools', 'agents']
+
+/**
+ * 宿主侧的包要从 dsh 自己的安装里取，不能是本插件的依赖：插件被装进 profile 时，
+ * profile 的 node_modules 里只有插件自己，`@deepseek-ai/*` 都由宿主提供。
+ */
+const hostRequire = (() => {
+  const fromThisModule = createRequire(import.meta.url)
+  try {
+    return createRequire(fromThisModule.resolve('@deepseek-ai/dsh/package.json'))
+  } catch {
+    return fromThisModule
+  }
+})()
+
+const hostModule = (specifier) => {
+  try {
+    return hostRequire(specifier)
+  } catch (error) {
+    throw new Error(`无法从 dsh 安装里加载 ${specifier}：${errorMessage(error)}`)
+  }
+}
+
+const { scopeOf } = hostModule('@deepseek-ai/dsh-scope')
 
 const HOME = homedir()
 const DSH_HOME = process.env.DSH_HOME ?? join(HOME, '.dsh')
@@ -334,24 +403,32 @@ export const listDirectory = (path) => {
 
 // ─────────────────────────────────────────────────────────── remote markers
 
-const MARKER_INITIALIZERS = []
-/** Attach `@Remote` markers without decorator syntax. */
+/**
+ * Typert 网关在服务实例的 prototype 上读这个键拿到方法清单。协议包把这个键名当公开约定，
+ * 这里写同一份形状：{ version: 1, methods: [{ method, invocation: { kind: 'direct' } }] }。
+ */
+const REMOTE_METHOD_DESCRIPTOR = '@deepseek-ai/dsh-typert-protocol/remote-methods'
+
+/** 给服务原型挂上 Remote 方法标记。 */
 const markRemote = (target, methods) => {
   for (const method of methods) {
-    Remote(target.prototype[method], {
-      kind: 'method',
-      name: method,
-      static: false,
-      private: false,
-      addInitializer: (initializer) => MARKER_INITIALIZERS.push(initializer),
+    const prototype = target.prototype
+    const existing = Object.getOwnPropertyDescriptor(prototype, REMOTE_METHOD_DESCRIPTOR)?.value
+    const marker = Object.freeze({ method, invocation: Object.freeze({ kind: 'direct' }) })
+    Object.defineProperty(prototype, REMOTE_METHOD_DESCRIPTOR, {
+      configurable: true,
+      value: Object.freeze({
+        version: 1,
+        methods: Object.freeze([...(existing?.methods ?? []), marker]),
+      }),
     })
   }
 }
 
-class SkillMcpManagerService extends TypertRemoteService {
+class SkillMcpManagerService extends Service {
   constructor(ctx, runtime) {
     super(ctx, RPC_SERVICE)
-    for (const initializer of MARKER_INITIALIZERS) initializer.call(this)
+    this.typertRemote = Object.freeze({ service: this, serviceKey: RPC_SERVICE, namespace: RPC_SERVICE })
     this.runtime = runtime
   }
 
@@ -633,7 +710,7 @@ export function apply(ctx, config = {}) {
 
   const mountMcpServer = (targetCtx, server, key, label, meta = {}) => {
     try {
-      const fiber = targetCtx.plugin(McpClient, mcpConfigOf(server))
+      const fiber = targetCtx.plugin(hostModule('@deepseek-ai/dsh-mcp-client'), mcpConfigOf(server))
       registerMount(key, label, 'mcp', meta.scope ?? 'server', fiber, { serverName: server.name, mountName: mcpConfigOf(server).serverName, sessionId: meta.sessionId ?? '' })
     } catch (error) {
       mountErrors.set(key, errorMessage(error))
