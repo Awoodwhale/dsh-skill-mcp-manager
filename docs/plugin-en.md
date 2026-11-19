@@ -21,7 +21,7 @@ Skills are grouped by the agent whose directory holds them, and the groups come 
 - Renaming in the editor renames the directory; the description and the body go straight into SKILL.md.
 - Deleting removes the directory or the file, and the confirmation names exactly what goes away.
 
-Switching off never touches a file on disk: it only decides whether the model can see the skill. In directories the host scans itself, a disabled name keeps a placeholder of the same name, so it still appears once and cannot be invoked. In other directories the name simply disappears.
+Switching off never touches a file on disk: it only decides whether the model can see the skill. Every disabled name leaves a placeholder of the same name in its own layer, with both invocation flags off and one rank ahead of its own source; the registry de-duplicates by name and keeps the one ranked ahead, so the name disappears from the model's list and from the slash menu together.
 
 ## MCP servers
 
@@ -29,7 +29,7 @@ Servers follow the same scopes, and the nearest scope wins for a given name. Two
 
 ## What one message carries
 
-A button at the lower left of the composer opens the list of every skill and server this conversation can see, grouped by source. What is switched off there applies to that turn only and reverts afterwards. It sits nearer than project and global, and it is how you free up context or swap a server for one message.
+The `Abilities` button at the lower left of the composer opens the list of every skill and server this conversation can see, grouped by source. What is switched off there applies to that turn only and reverts afterwards. It sits nearer than project and global, and it is how you free up context or swap a server for one message.
 
 ## The record file
 

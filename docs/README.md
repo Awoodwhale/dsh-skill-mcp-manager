@@ -32,6 +32,10 @@ npm run build && npm run typecheck && npm test
 
 版本号、改动记录写在 `package.json` 与 `CHANGELOG.md` 里，两者同步更新。
 
+## 发布
+
+推一条 GitHub Release 就发一次 npm。完整步骤（提版本、打标签、`gh release create`、等 registry 可见、装进干净 profile 复验）写在 `docs/development.md` 的「发布」一节。
+
 ## 与其他仓库的关系
 
 - 安装与使用说明在根目录 `README.md`，面向使用者。

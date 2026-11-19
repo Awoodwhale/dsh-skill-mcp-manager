@@ -29,7 +29,7 @@
 ├── test/
 │   ├── skills.test.mjs     # SKILL.md 的解析与渲染
 │   ├── sources.test.mjs    # 目录解析与优先级
-│   ├── plan.test.mjs       # 候选规划与隐藏占位
+│   ├── plan.test.mjs       # 候选规划与同名占位
 │   ├── store.test.mjs      # 记录规范化、目录规则、名称派生
 │   ├── remote.test.mjs     # 两端产物一致性、端点覆盖、manifest
 │   └── fixture/mcp-server.mjs  # 零依赖的 MCP stdio 服务，echo 与 add
@@ -87,7 +87,7 @@ npm test             # 五个测试文件 + 两份生成物的漂移比对
 |---|---|
 | `skills.test.mjs` | frontmatter 解析、正文渲染、名称合法性、目录形式的写入 |
 | `sources.test.mjs` | 十五行目录表、环境变量覆盖、会话来源、额外目录、优先级、`forced` 透传 |
-| `plan.test.mjs` | 三组展开顺序、隐藏占位、只对宿主扫的目录发占位、`forced` 在整组关闭时仍发布 |
+| `plan.test.mjs` | 三组展开顺序、关掉的名字必发同名占位、占位的排名比来源靠前一位、更近一层关掉时占位取最近那份、`forced` 在整组关闭时仍发布 |
 | `store.test.mjs` | 记录规范化、空记录清理、`mountNameOf` 派生、服务器 id 稳定性 |
 | `remote.test.mjs` | 端点表与宿主侧逐条对应、页面调用的每个方法都存在、产物注释与 manifest、生成物与源码不一致 |
 
@@ -107,9 +107,13 @@ npm test             # 五个测试文件 + 两份生成物的漂移比对
 
 **组件用 class。** 槽位里的组件如果 render 抛错会被错误边界永久退位（页面上出现 `data-slot-error`），所以 `render` 里要 try/catch 兜住。
 
-## 发布前
+## 发布
 
 1. `npm run build && npm run typecheck && npm test` 全绿
-2. `package.json` 提版本，`CHANGELOG.md` 加一段
-3. `npm pack`，在干净目录里 `npm install` 那个 `.tgz`，确认 `lib/index.js` 与 `lib/client.js` 都在
-4. 用新 profile 装这个 tgz 走一遍安装流程
+2. `npm pkg set version=X.Y.Z`，再 `npm install --package-lock-only --ignore-scripts` 让 lock 跟上；`CHANGELOG.md` 加一段
+3. 提交并推送，然后打标签：`git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z`
+4. `gh release create vX.Y.Z --title "vX.Y.Z" --notes "..."`。发布 Release 会触发 `.github/workflows/release.yml`：它先核对该标签去掉 `v` 之后与 `package.json` 的版本一致，再跑构建、生成物漂移比对、类型检查与测试，然后把 npm 升到 11.5.1 以上（OIDC 换凭据需要这个版本），最后用 OIDC 发布到 npm，不需要仓库里存 token
+5. 等 npm 上的 `latest` 变成新版本（`npm view @awoodwhale/dsh-skill-mcp-manager dist-tags.latest`），发布本身要一两分钟才可见。带 `-` 的预发布版本走 `next` 这个 tag，不动 `latest`
+6. 装进一个干净的 profile 走一遍：`dsh plugin --profile <name> add @awoodwhale/dsh-skill-mcp-manager@X.Y.Z`，重启后用带 token 的地址打开，确认设置页两个入口都在
+
+提交说明按 Conventional Commits 写，前缀加中文描述，例如 `fix: 关掉的 skill 不再出现在斜杠菜单里`。仓库的 `commit-msg` 钩子会拦下不合规的第一行。

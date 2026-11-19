@@ -47,7 +47,7 @@ The skill manager groups by agent: one header row per source, the skills it hold
 
 ![Skills the model can see](docs/images/catalog.png)
 
-The `SKILL·MCP` pill at the bottom left of the composer covers this conversation only, grouped by agent:
+The `Abilities` pill at the bottom left of the composer covers this conversation only, grouped by agent:
 
 ![What this message carries](docs/images/composer-sheet.png)
 
@@ -87,7 +87,7 @@ After the restart the settings sidebar has two more entries, **SKILL manager** a
 cat ~/.dsh/dsh-skill-mcp-manager/state.json
 ```
 
-It records the version loaded this time, where the record file sits, and how many connections are up.
+It records when this load happened, the absolute path of the artifact, the plugin version, whether it is a local copy or an npm install, where the record file sits, and how many sources are mounted.
 
 ```bash
 dsh plugin --profile web update @awoodwhale/dsh-skill-mcp-manager   # upgrade
@@ -106,7 +106,7 @@ dsh plugin --profile web remove @awoodwhale/dsh-skill-mcp-manager   # uninstall;
 | See what the model really reads | Press `Check the model view` |
 | Add an MCP server | On the MCP page press `Add server` and choose local process or HTTP |
 | Let one conversation use an MCP server | Add it in the conversation scope, or add it globally and switch it off in the conversation |
-| Drop a skill for this message only | The `SKILL·MCP` button at the bottom left of the composer |
+| Drop a skill for this message only | The `Abilities` button at the bottom left of the composer |
 | Withdraw a sidebar icon or a conversation tab | The `Places` button in the page header, four switches |
 
 ### How the three scopes stack
@@ -125,7 +125,7 @@ The conversation layer picks the conversation itself: its title when it has one,
 
 Only this plugin's record file. No skill file on disk is written, moved, or deleted.
 
-Something switched off publishes a placeholder of the same name in its own layer, marked as not invocable, so the built-in directory reader may well read that file and the model still cannot reach it. Delete the record and everything returns to where it was.
+Something switched off publishes a placeholder of the same name in its own layer, with both invocation flags off, one rank ahead of its own source. The registry de-duplicates by name first and keeps the one ranked ahead, so the name disappears from the model's list and from the slash menu alike, while not a byte on disk moves. Delete the record and everything returns to where it was.
 
 ### How a skill is written
 
@@ -169,7 +169,7 @@ The body…
 - The conversation layer has one source: `$DSH_HOME/dsh-skill-mcp-manager/sessions/<conversation id>/skills`. It starts out on and is created when the first skill is written into it.
 - An agent outside the table needs no release: press `Add directory` and point at it. An extra directory is keyed by its absolute path and sorts after the table.
 
-> The host already scans DSH's own directories. This plugin does not publish them a second time; it only decides what is on. Switching a skill off in the DSH source works through a same-named placeholder, not through a second scan.
+> The host already scans DSH's own directories. This plugin does not publish the visible candidates they already provide a second time; it adds a same-named placeholder only for the names turned off there, which is how switching a skill off in the DSH source works without touching the file.
 
 ## MCP servers
 
@@ -197,7 +197,7 @@ A server card lists the tool names currently connected. While the conversation h
 
 The pill button at the bottom left of the composer sits at the same height and colour as the permission button beside it:
 
-- Without changes it reads `SKILL·MCP`; with changes it reads `SKILL·MCP 2`.
+- Without changes it reads `Abilities`; a turn with temporary changes adds a count on its right.
 - The sheet splits into `Skills` and `MCP` at the top, then groups by agent. A group header carries the source name and the count, and a switch at its left carries or drops the whole group at once.
 - Every group starts collapsed, so dozens of skills never fill the screen.
 - A row switched off is struck through and marked `Dropped this time`; a row lifted out of a disabled source is marked `Added this time`.
@@ -212,7 +212,7 @@ All configuration lives in one file, shared by the three scopes:
 ```
 $DSH_HOME/dsh-skill-mcp-manager/
   store.json                   # the three scopes, the display places, and each conversation's temporary switches
-  state.json                   # a heartbeat of this load
+  state.json                   # heartbeat of this load: version, artifact path, record location, mounts
   sessions/<conversation id>/skills/   # the default directory for conversation-level skills
 ```
 
@@ -263,7 +263,7 @@ Written on the profile's bundle line; neither is required.
 
 - The Web end only (`dsh web`); there is no command-line interface.
 - It manages the skills already in local directories and the servers you add by hand; it does not install from a Git repository or a marketplace.
-- Switching off works through a same-named placeholder, so a source switched off as a whole still shows the model "same name, not invocable" once. That only happens for the directories the host scans itself (`$DSH_HOME/skills`, `~/.agents/skills`) and their project counterparts; for every other directory the name simply disappears.
+- Switching off works through a same-named placeholder, one rank ahead of its own source, so the name is gone from the model's list and from the slash menu at the same time. The model side and the slash menu show the same result.
 - A `stdio` server is started and managed by the host; the plugin connects and disconnects it in the right scope.
 
 ## Development
