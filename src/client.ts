@@ -347,16 +347,17 @@ window.__ModuleLoader__.load({
       'settings.title': '显示位置',
       'settings.note': '改完立刻生效。技能与 MCP 本身在设置里的 SKILL管理、MCP管理两页。',
       'settings.loading': '正在读取设置…',
-      'composer.chip.hint': '这一次发送带上的 SKILL 与 MCP',
-      'composer.chip.changed': '这一次发送改动了 {n} 项',
+      'composer.chip.hint': '选择这一次发送带上哪些 skill 与 MCP',
+      'composer.chip.changed': '这一次单独选了 {n} 项',
+      'composer.chip.label': '能力',
       'composer.title': '这一次发送带上什么',
-      'composer.sub': '这里的开关只管这一条会话，优先级高于项目与全局。回合结束就恢复原样。',
-      'composer.none': '这一次没有改动',
-      'composer.count': '这一次改动了 {n} 项',
+      'composer.sub': '只对这一次发送有效：选中的 skill 与 MCP 这次带上，没选的这次不带。改完不影响项目与全局的记录，这一回合结束就恢复原样。',
+      'composer.none': '这一次没有单独选择',
+      'composer.count': '这一次单独选了 {n} 项',
       'composer.reset': '全部恢复',
       'composer.close': '关闭',
       'composer.tabs.label': '带上什么',
-      'composer.tab.skill': '技能 {n}',
+      'composer.tab.skill': 'skill {n}',
       'composer.tab.server': 'MCP {n}',
       'composer.empty.server': '这条会话还没有 MCP 服务器。去 mcp 页加一个。',
       'composer.empty.skill': '这条会话还没有能带上的技能。',
@@ -669,13 +670,14 @@ window.__ModuleLoader__.load({
       'settings.title': 'Where it appears',
       'settings.note': 'Changes apply at once. Skills and MCP servers themselves live on the SKILL manager and MCP manager pages in settings.',
       'settings.loading': 'Reading the settings…',
-      'composer.chip.hint': 'What this message carries, SKILL and MCP',
-      'composer.chip.changed': 'This message changes {n} items',
+      'composer.chip.hint': 'Pick the skills and MCP servers to carry in this message',
+      'composer.chip.changed': 'Picked {n} items for this message',
+      'composer.chip.label': 'Abilities',
       'composer.title': 'What this message carries',
-      'composer.sub': 'These switches cover this conversation only and sit nearer than project and global. The turn ends, and everything reverts.',
-      'composer.none': 'Nothing changed for this message',
-      'composer.count': 'Changed {n} items for this message',
-      'composer.count.one': 'Changed {n} item for this message',
+      'composer.sub': 'Applies to this message only: what you pick is carried this time, the rest is left out. The record of this project and of everything global stays untouched, and the turn ends with the settings back to how they were.',
+      'composer.none': 'Nothing picked for this message',
+      'composer.count': 'Picked {n} items for this message',
+      'composer.count.one': 'Picked {n} item for this message',
       'composer.reset': 'Restore all',
       'composer.close': 'Close',
       'composer.tabs.label': 'What this message carries',
@@ -1085,6 +1087,7 @@ window.__ModuleLoader__.load({
 .acap-chip-icon { display: inline-flex; flex: none; }
 .acap-chip-icon svg { width: 14px; height: 14px; }
 .acap-chip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acap-chip-count { flex: none; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: color-mix(in srgb, currentColor 16%, transparent); font-size: 10.5px; font-weight: 600; line-height: 16px; text-align: center; font-variant-numeric: tabular-nums; }
 .acap-chip-chevron { display: inline-flex; flex: none; color: var(--dsw-alias-label-caption, var(--acap-muted-2)); transition: transform 0.12s; }
 .acap-chip[data-open="true"] .acap-chip-chevron { transform: rotate(180deg); }
 
@@ -1274,7 +1277,12 @@ window.__ModuleLoader__.load({
     const Segmented = ({ id, value, options, onChange, label }) => h(SegmentedControl, {
       id: id ?? 'acap-segmented',
       value,
-      options: options.map((option) => ({ value: option.value, label: t(option.key), title: t(option.hintKey) })),
+      // 常量表里的选项带词条键，调用方也可以直接把翻好的文案传进来。
+      options: options.map((option) => ({
+        value: option.value,
+        label: option.label ?? t(option.key),
+        title: option.title ?? (option.hintKey === undefined ? undefined : t(option.hintKey)),
+      })),
       onChange,
       label,
     })
@@ -3276,6 +3284,7 @@ window.__ModuleLoader__.load({
             'data-changed': changed > 0,
             'data-open': this.state.open === true,
             'aria-expanded': this.state.open === true,
+            'aria-label': t('composer.chip.label'),
             title: changed === 0 ? t('composer.chip.hint') : t('composer.chip.changed', { n: changed }),
             onClick: () => {
               this.patch({ open: true, error: '' })
@@ -3283,7 +3292,8 @@ window.__ModuleLoader__.load({
             },
           }, [
             h('span', { key: 'i', className: 'acap-chip-icon' }, icon(IconSkill, { size: 14 })),
-            h('span', { key: 't', className: 'acap-chip-label' }, changed === 0 ? 'SKILL·MCP' : `SKILL·MCP ${changed}`),
+            h('span', { key: 't', className: 'acap-chip-label' }, t('composer.chip.label')),
+            changed === 0 ? null : h('span', { key: 'n', className: 'acap-chip-count' }, String(changed)),
             h('span', { key: 'c', className: 'acap-chip-chevron' }, icon(IconChevron, { size: 12 })),
           ]),
           this.state.open !== true ? null : this.renderSheet(),

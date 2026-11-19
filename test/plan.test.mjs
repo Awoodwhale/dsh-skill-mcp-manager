@@ -45,6 +45,7 @@ const source = (id, extra = {}) => ({
   enabled: true,
   disabled: [],
   exists: true,
+  scope: 'global',
   rank: 10,
   ...extra,
 })
@@ -111,7 +112,9 @@ const byName = (rows, name) => rows.find((row) => row.name === name)
     { source: source('claude', { enabled: false }), skills: [skill('pdf')] },
     { source: source('codex'), skills: [skill('pdf')] },
   ])], PROVIDER)
-  assert.deepEqual(rows, [], '同一层里最近的副本关掉，这个名字就在这一层消失，不能让后排的副本顶上来')
+  assert.deepEqual(names(rows), ['pdf'], '同一层里最近的副本关掉，这个名字整层都关着，后排的副本不能顶上来')
+  assert.equal(rows[0].locator.hidden, true, '答案是一条影子，名字还在，但谁都调不动')
+  assert.equal(rows[0].source, 'claude', '影子取最近的那一份')
 }
 
 {
@@ -129,7 +132,11 @@ const byName = (rows, name) => rows.find((row) => row.name === name)
   const rows = planCandidates([group([
     { source: source('claude', { enabled: false }), skills: [skill('pdf')] },
   ])], PROVIDER)
-  assert.deepEqual(rows, [], '只有宿主自己会读的目录需要影子，别的目录停用后本来就看不见')
+  assert.deepEqual(names(rows), ['pdf'], '关掉的名字要发一条影子，压住宿主可能自己读到的同一份')
+  assert.equal(rows[0].locator.hidden, true)
+  assert.equal(rows[0].invocation.modelInvocable, false)
+  assert.equal(rows[0].invocation.userInvocable, false, '影子的两个开关都要关：斜杠菜单只看 userInvocable')
+  assert.equal(rows[0].rank, 9, '影子要比它自己的来源排得更前，才压得住别人发的同一份')
 }
 
 {
@@ -142,24 +149,24 @@ const byName = (rows, name) => rows.find((row) => row.name === name)
   assert.equal(rows[0].locator.root, '/skills/claude')
 }
 
-// ── rank follows the order the layers give ─────────────────────────────────
+// ── rank follows the source, and twins sort ahead of what they cover ───────
 
 {
   const rows = planCandidates([
-    group([{ source: source('session', { kind: 'session' }), skills: [skill('session-only')] }]),
-    group([{ source: source('claude'), skills: [skill('pdf')] }]),
+    group([{ source: source('session', { kind: 'session', rank: 10 }), skills: [skill('session-only')] }]),
+    group([{ source: source('claude', { rank: 13 }), skills: [skill('pdf')] }]),
   ], PROVIDER)
   assert.deepEqual(names(rows), ['session-only', 'pdf'])
-  assert.equal(rows[0].rank, 10, '第一组第一个来源从 10 开始')
-  assert.equal(rows[1].rank, 11, '后面的组排在后面，同一层里最近的层先出现')
+  assert.equal(rows[0].rank, 10, '候选带的是它自己来源的排名')
+  assert.equal(rows[1].rank, 13, '更远一层来的候选排在后面')
 }
 
 {
   const rows = planCandidates([group([
-    { source: source('dsh', { hostScanned: true }), skills: [] },
-    { source: source('claude'), skills: [skill('pdf')] },
+    { source: source('dsh', { hostScanned: true, rank: 10 }), skills: [] },
+    { source: source('claude', { rank: 11 }), skills: [skill('pdf')] },
   ])], PROVIDER)
-  assert.equal(rows[0].rank, 11, '排在前面的来源占掉一个号，后面的来源不会因为不出候选就提前')
+  assert.equal(rows[0].rank, 11, '来源的排名在解析来源时就定好了，不会因为前面那个来源不出候选就提前')
 }
 
 {
@@ -176,22 +183,26 @@ const byName = (rows, name) => rows.find((row) => row.name === name)
   const rows = planCandidates([group([
     { source: source('claude', { enabled: true, disabled: ['docx'] }), skills: [skill('pdf'), skill('docx')] },
   ])], PROVIDER)
-  assert.deepEqual(names(rows), ['pdf'], '整个来源停用之后单独开起来的名字，要一路活到候选这里')
-  assert.equal(rows[0].locator.hidden, false, '这一次带上的是可见候选')
+  assert.deepEqual(names(rows), ['pdf', 'docx'], '开着的名字照常发布，关着的那一个留在候选里当影子')
+  assert.equal(byName(rows, 'pdf').locator.hidden, false, '这一次带上的是可见候选')
+  assert.equal(byName(rows, 'docx').locator.hidden, true, '这一次不带的名字要用影子把名字压住')
 }
 
 {
   const rows = planCandidates([group([
     { source: source('claude', { enabled: true, disabled: ['pdf'] }), skills: [skill('pdf')] },
   ])], PROVIDER)
-  assert.deepEqual(rows, [], '关着的名字就是关着；自带目录之外的副本不发影子，名字直接不出现')
+  assert.deepEqual(names(rows), ['pdf'], '关着的名字就是关着，候选里只留一条影子')
+  assert.equal(rows[0].locator.hidden, true)
 }
 
 {
   const rows = planCandidates([group([
     { source: source('claude', { enabled: true, disabled: ['docx'] }), skills: [skill('pdf'), skill('docx')] },
   ])], PROVIDER)
-  assert.deepEqual(names(rows), ['pdf'], '只开着其中一个名字时，另一个名字不出现，开着的照常发布')
+  assert.deepEqual(names(rows), ['pdf', 'docx'], '开着的照常发布，关着的那一个留一条影子把名字压住')
+  assert.equal(byName(rows, 'pdf').locator.hidden, false)
+  assert.equal(byName(rows, 'docx').locator.hidden, true)
 }
 
 {
@@ -206,18 +217,13 @@ const byName = (rows, name) => rows.find((row) => row.name === name)
 
 {
   const rows = planCandidates([
-    group([{ source: source('session', { kind: 'session', disabled: ['pdf'] }), skills: [skill('pdf')] }]),
-    group([{ source: source('claude'), skills: [skill('pdf')] }]),
+    group([{ source: source('session', { kind: 'session', disabled: ['pdf'], rank: 10 }), skills: [skill('pdf')] }]),
+    group([{ source: source('claude', { rank: 12 }), skills: [skill('pdf')] }]),
   ], PROVIDER)
-  assert.deepEqual(rows, [], '会话里关掉的技能，不能靠更远的来源再回到模型或斜杠菜单')
-}
-
-{
-  const rows = planCandidates([
-    group([{ source: source('session', { kind: 'session', disabled: ['pdf'] }), skills: [skill('pdf')] }]),
-    group([{ source: source('dsh', { hostScanned: true }), skills: [skill('pdf')] }]),
-  ], PROVIDER)
-  assert.deepEqual(rows, [], '自带目录只在自己那一层需要影子；更近的一层关掉这个名字，就不再给它发影子')
+  assert.deepEqual(names(rows), ['pdf'], '会话里关掉的技能，要靠影子压住更远来源的同一份')
+  assert.equal(rows[0].locator.hidden, true)
+  assert.equal(rows[0].source, 'session', '影子取最近的那一份')
+  assert.equal(rows[0].rank, 9, '影子的排名要比它自己的来源更靠前')
 }
 
 {
@@ -225,7 +231,8 @@ const byName = (rows, name) => rows.find((row) => row.name === name)
     group([{ source: source('session', { kind: 'session', enabled: false }), skills: [skill('pdf')] }]),
     group([{ source: source('claude'), skills: [skill('pdf')] }]),
   ], PROVIDER)
-  assert.deepEqual(rows, [], '会话里的来源整组停用，等于这一层关掉了这个名字，更远的副本不再接手')
+  assert.deepEqual(names(rows), ['pdf'], '会话里的来源整组停用，等于这一层关掉了这个名字，更远的副本不再接手')
+  assert.equal(rows[0].locator.hidden, true)
 }
 
 {

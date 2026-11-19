@@ -18,10 +18,11 @@
  *   - a project or session scope registers one on `agent.ctx` (that agent's layer), so
  *     its decisions are invisible to every other agent.
  *
- * Inside one layer the provider emits, in source priority order, every skill of an
- * enabled source. A skill the user turned off is emitted as a HIDDEN twin — same name,
- * `modelInvocable` and `userInvocable` false, lower rank — which shadows the copy the
- * shipped provider would otherwise publish without touching a single file on disk.
+ * Inside one layer the provider emits one candidate per skill name, in source priority
+ * order. A skill the user turned off is emitted as a HIDDEN twin — same name, both
+ * invocation flags false, one rank ahead of its own source — which wins the name inside
+ * the registry and then publishes nothing. That is what takes the name out of the
+ * model's list and out of the slash menu without touching a single file on disk.
  *
  * A session can also switch skills and MCP servers off for the coming turn only. Those
  * temporary names are applied exactly like the stored switches, and are dropped as soon
@@ -774,7 +775,8 @@ export function apply(ctx, config = {}) {
     name: SKILL_PROVIDER,
     async list() {
       return planCandidates(groupsFor(), SKILL_PROVIDER)
-    },    async get(candidate) {
+    },
+    async get(candidate) {
       const locator = candidate?.locator ?? {}
       if (locator.hidden === true || typeof locator.root !== 'string') return undefined
       const skill = readSkillDoc(locator.root, candidate.name)

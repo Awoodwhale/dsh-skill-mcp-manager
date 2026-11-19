@@ -108,7 +108,7 @@ export const resolveSources = (record, options) => {
   const rows = []
   const push = (row) => {
     if (rows.some((other) => other.dir === row.dir)) return
-    rows.push({ ...row, rank: 10 + rows.length })
+    rows.push({ ...row, scope, rank: 10 + rows.length })
   }
 
   if (scope === 'session') {
