@@ -7,7 +7,7 @@
  * .test-tmp/ inside this package so nothing is written outside the repository.
  */
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -232,6 +232,63 @@ assert.deepEqual(listSkills(join(scratch, 'nowhere')), [], '目录不存在时�
   assert.equal(deleteSkill(skillsRoot, 'flat-one').form, 'file')
   assert.equal(hasSkill(skillsRoot, 'flat-one'), false)
   assert.throws(() => deleteSkill(skillsRoot, 'flat-one'), /「flat-one」不存在（可能已被删除）/)
+}
+
+// ── a folder whose name differs from its frontmatter name ──────────────────
+
+{
+  const odd = join(scratch, 'odd')
+  mkdirSync(join(odd, 'folder-a'), { recursive: true })
+  mkdirSync(join(odd, 'real-b'), { recursive: true })
+  writeFileSync(join(odd, 'folder-a', 'SKILL.md'), '---\nname: real-b\ndescription: 目录叫 folder-a\n---\nA 的正文\n')
+  writeFileSync(join(odd, 'real-b', 'SKILL.md'), '---\nname: other\ndescription: 目录叫 real-b\n---\nB 的正文\n')
+  assert.equal(locateSkill(odd, 'real-b').bundle, join(odd, 'folder-a'), '按 frontmatter 的名字找，不按目录名拼路径')
+  assert.equal(readSkill(odd, 'real-b').content.trim(), 'A 的正文')
+  writeSkill(odd, { name: 'real-b', description: '改过', whenToUse: '', content: 'A 改过' })
+  assert.match(readFileSync(join(odd, 'folder-a', 'SKILL.md'), 'utf8'), /A 改过/, '原地重写自己的文件')
+  assert.match(readFileSync(join(odd, 'real-b', 'SKILL.md'), 'utf8'), /B 的正文/, '同名目录里的别的技能不受影响')
+  deleteSkill(odd, 'real-b')
+  assert.equal(existsSync(join(odd, 'folder-a')), false)
+  assert.equal(existsSync(join(odd, 'real-b', 'SKILL.md')), true, '删除只删自己那份')
+}
+
+// ── names that look like paths never reach the disk ────────────────────────
+
+{
+  const guarded = join(scratch, 'guarded')
+  mkdirSync(join(guarded, 'inner'), { recursive: true })
+  writeFileSync(join(guarded, 'inner', 'SKILL.md'), '---\nname: inner\ndescription: d\n---\n')
+  assert.equal(locateSkill(join(guarded, 'inner'), '..'), undefined)
+  assert.throws(() => deleteSkill(join(guarded, 'inner'), '..'), /不存在/)
+  assert.equal(existsSync(join(guarded, 'inner', 'SKILL.md')), true, '名字是 .. 时什么都不删')
+}
+
+// ── renaming a directory bundle carries its resource files ─────────────────
+
+{
+  const moving = join(scratch, 'moving')
+  writeSkill(moving, { name: 'before', description: 'd', whenToUse: '', content: '正文' }, { form: 'dir' })
+  writeFileSync(join(moving, 'before', 'helper.py'), 'print(1)\n')
+  writeSkill(moving, { name: 'after', description: 'd', whenToUse: '', content: '正文' }, { renameFrom: 'before' })
+  assert.equal(existsSync(join(moving, 'before')), false)
+  assert.equal(readFileSync(join(moving, 'after', 'helper.py'), 'utf8'), 'print(1)\n', '资源文件跟着目录一起走')
+  assert.deepEqual(skillResources(moving, 'after').map((entry) => entry.name), ['helper.py'])
+  assert.throws(() => writeSkill(moving, { name: 'x', description: 'd', whenToUse: '', content: '' }, { renameFrom: 'gone' }), /「gone」不存在/)
+}
+
+// ── what the host refuses to read ──────────────────────────────────────────
+
+{
+  const host = join(scratch, 'host')
+  mkdirSync(join(host, 'no-desc'), { recursive: true })
+  writeFileSync(join(host, 'no-desc', 'SKILL.md'), '---\nname: no-desc\n---\n正文\n')
+  const row = listSkills(host).find((entry) => entry.name === 'no-desc')
+  assert.equal(row.valid, false, '缺 description 宿主不读，这里也标成无效，不发候选')
+  assert.equal(readSkill(host, 'no-desc').problem !== '', true)
+  assert.throws(() => writeSkill(host, { name: 'blank', description: ' ', whenToUse: '', content: '' }), /说明不能为空/)
+  assert.equal(recordOf('---\nname: a\ndescription: d\ndisable-model-invocation: "yes"\n---\n').modelInvocable, false, '与宿主一样认 yes')
+  assert.equal(recordOf('---\nname: a\ndescription: d\nuser-invocable: 0\n---\n').userInvocable, false, '与宿主一样认 0')
+  assert.throws(() => recordOf('---\nname: a\ndescription: d\nuser-invocable: maybe\n---\n'), /必须是布尔值/)
 }
 
 rmSync(scratch, { recursive: true, force: true })

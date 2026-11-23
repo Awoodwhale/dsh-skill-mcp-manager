@@ -30,9 +30,9 @@ Three entry points, so the change lands wherever you are: two manager pages in t
 - **Three scopes**: `global` reaches every conversation, `project` reaches every conversation whose working directory sits under the same project root, `conversation` reaches that one conversation. The nearer scope wins.
 - **Switches per source and per skill**: turning a source off removes every skill it holds; turning one skill off removes that skill alone. After a whole group is off, a single skill can still be switched back on, and its row says `Switched on`.
 - **One owner per name**: when two sources hold a skill of the same name, the nearest copy decides. Switching that copy off removes the name from the whole scope, so no switch is ever left without an effect.
-- **Create, edit, and delete skills**: a new skill (directory form or single file), then change its name, description, trigger, or body. Renaming clears the old directory away instead of leaving two copies.
+- **Create, edit, and delete skills**: a new skill (directory form or single file), then change its name, description, trigger, or body. Renaming moves the whole directory, resource files included, to the new name instead of leaving two copies.
 - **Create, edit, and delete MCP servers**: local process or HTTP, with command, arguments, working directory, environment variables, and request headers. Environment variables and headers are filled one key and one value per row, and a value may contain an equals sign. A server can be switched off without being deleted.
-- **Check the model view**: one button reads the registry and reports the skill names, sources, scopes, and providers the model actually reads at this moment. The global scope answers even with no live conversation.
+- **Check the model view**: one button works out, from the directories, the skill names, sources, scopes, and providers the model actually reads at this moment. The global scope answers even with no live conversation.
 - **Temporary switches**: the sheet at the bottom left of the composer groups skills by agent, and a switch at the left of each group carries or drops the whole group at once. These belong to the current conversation, sit nearer than project and global, and clear themselves when the turn ends.
 - **Four display places, each switchable**: two sidebar icons and two conversation tabs are toggled from the `Places` sheet in the page header and from the plugin's own detail page; a place switched off is withdrawn at once.
 - **Feedback through toasts**: saving, deleting, and switching all report from the top of the page and disappear on their own, so the body never shifts under a notice.
@@ -43,7 +43,7 @@ The skill manager groups by agent: one header row per source, the skills it hold
 
 ![Skill manager: skills grouped by source](docs/images/skills-page.png)
 
-`Check the model view` reads the registry itself, so you see exactly the names the model holds right now.
+`Check the model view` works the list out from the directories with the same rules the plugin uses to publish candidates, so you see the names the model holds right now.
 
 ![Skills the model can see](docs/images/catalog.png)
 
@@ -87,7 +87,7 @@ After the restart the settings sidebar has two more entries, **SKILL manager** a
 cat ~/.dsh/dsh-skill-mcp-manager/state.json
 ```
 
-It records when this load happened, the absolute path of the artifact, the plugin version, whether it is a local copy or an npm install, where the record file sits, and how many sources are mounted.
+It records when this load happened, the absolute path of the artifact, the plugin version, whether it is a local copy or an npm install, where the record file sits, and how many mounts are live (one skill provider per conversation, plus one per connected MCP server).
 
 ```bash
 dsh plugin --profile web update @awoodwhale/dsh-skill-mcp-manager   # upgrade
@@ -102,7 +102,7 @@ dsh plugin --profile web remove @awoodwhale/dsh-skill-mcp-manager   # uninstall;
 | Switch one skill back on after the whole group is off | Press that row's switch; the row then carries `Switched on` |
 | Make a skill appear in this conversation only | Open the `Session skills` tab, choose the conversation, press `New skill`; or switch it off in project and global and on here |
 | Add a skill for this project only | Open the `Project skills` tab, choose the project root, press `New skill` |
-| Read skills from another directory | `Remove` or `Add directory` on a source card, pointing at an absolute path |
+| Read skills from another directory | Press `Add directory` and point at an absolute path; remove an extra directory you no longer need on its source card |
 | See what the model really reads | Press `Check the model view` |
 | Add an MCP server | On the MCP page press `Add server` and choose local process or HTTP |
 | Let one conversation use an MCP server | Add it in the conversation scope, or add it globally and switch it off in the conversation |
@@ -165,7 +165,7 @@ The body…
 | OpenClaw | `~/.openclaw/skills` | — | — |
 
 - DSH and the shared Agent directory start out on; the rest start out off, one press away.
-- A directory this machine does not have is not listed. A directory already configured and deleted later stays in the list marked as missing, so the path can be corrected.
+- A directory this machine does not have is not listed, except the DSH row: it is always there so the first skill can be created in it. A directory already configured and deleted later stays in the list marked as missing, so the path can be corrected.
 - The conversation layer has one source: `$DSH_HOME/dsh-skill-mcp-manager/sessions/<conversation id>/skills`. It starts out on and is created when the first skill is written into it.
 - An agent outside the table needs no release: press `Add directory` and point at it. An extra directory is keyed by its absolute path and sorts after the table.
 

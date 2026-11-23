@@ -12,11 +12,10 @@
  *     project — every agent whose working directory belongs to one project root
  *     session — exactly one live session
  *
- * WHAT THE MODEL SEES is produced by a skill provider this plugin registers itself:
- *
- *   - the global scope registers its provider on the host context (the global layer);
- *   - a project or session scope registers one on `agent.ctx` (that agent's layer), so
- *     its decisions are invisible to every other agent.
+ * WHAT THE MODEL SEES is produced by a skill provider this plugin registers itself on
+ * every `agent.ctx` (that agent's layer). It publishes the session, project, and global
+ * records of that agent as three groups, so its decisions are invisible to every other
+ * agent.
  *
  * Inside one layer the provider emits one candidate per skill name, in source priority
  * order. A skill the user turned off is emitted as a HIDDEN twin — same name, both
@@ -79,8 +78,8 @@ import {
   STORE_VERSION,
   tempOf,
 } from './store.js'
-import { catalogOf, resolveSources, SESSION_SOURCE_ID } from './sources.js'
-import { planCandidates } from './plan.js'
+import { catalogOf, resolveSources, SESSION_SOURCE_ID, skillOn } from './sources.js'
+import { planCandidates, withTemp } from './plan.js'
 
 export const name = 'skill-mcp-manager'
 
@@ -169,7 +168,8 @@ const hostModule = (specifier) => {
 const { scopeOf } = hostModule('@deepseek-ai/dsh-scope')
 
 const HOME = homedir()
-const DSH_HOME = process.env.DSH_HOME ?? join(HOME, '.dsh')
+// 与宿主一致：空白的 DSH_HOME 当作没设置
+const DSH_HOME = (process.env.DSH_HOME ?? '').trim() === '' ? join(HOME, '.dsh') : resolve(process.env.DSH_HOME.trim())
 /**
  * Everything this plugin writes lives under one directory of its own. The name is pinned rather than
  * taken from the package: the npm scope is a publishing detail, and a rename must not orphan records.
@@ -312,8 +312,10 @@ export const collectSessions = ({ store, agents = [], cacheDir = SESSION_CACHE_D
     rows.set(sessionId, { ...sessionRow({ id: sessionId, title, cwd, live: true }), live: true })
   }
   for (const cached of recentSessionFiles(cacheDir)) {
-    if (rows.has(cached.id)) continue
-    rows.set(cached.id, sessionRow(cached))
+    const known = rows.get(cached.id)
+    if (known?.live === true) continue
+    // 记录里只存了会话 ID，标题与目录要从宿主的缓存里补上
+    rows.set(cached.id, sessionRow({ ...cached, title: known?.title || cached.title }))
   }
   return [...rows.values()].sort((left, right) => {
     if (left.live !== right.live) return left.live ? -1 : 1
@@ -571,6 +573,8 @@ export function apply(ctx, config = {}) {
 
   /** The one path through which the in-memory store changes. */
   const commit = (next) => {
+    // 记录文件读不出来时不能拿空记录覆盖它，那会把用户原来的配置全部抹掉
+    if (resetNote !== undefined) throw new Error(`记录文件 ${storePath} 读不出来（${resetNote.reason}），修好或移走它之后再改`)
     const normalized = normalizeStore(next)
     pruneEmpty(normalized)
     store = persist(normalized, storePath)
@@ -681,7 +685,6 @@ export function apply(ctx, config = {}) {
       .then(() => fiber.await())
       .then(() => {
         mount.settledAt = Date.now()
-        if (fiber.state === 3) mountErrors.set(key, '插件启动失败')
       }, (error) => {
         mount.settledAt = Date.now()
         mountErrors.set(key, errorMessage(error))
@@ -712,7 +715,7 @@ export function apply(ctx, config = {}) {
   const mountMcpServer = (targetCtx, server, key, label, meta = {}) => {
     try {
       const fiber = targetCtx.plugin(hostModule('@deepseek-ai/dsh-mcp-client'), mcpConfigOf(server))
-      registerMount(key, label, 'mcp', meta.scope ?? 'server', fiber, { serverName: server.name, mountName: mcpConfigOf(server).serverName, sessionId: meta.sessionId ?? '' })
+      registerMount(key, label, 'mcp', meta.scope ?? 'server', fiber, { serverName: server.name, mountName: mcpConfigOf(server).serverName, sessionId: meta.sessionId ?? '', signature: meta.signature, agent: meta.agent })
     } catch (error) {
       mountErrors.set(key, errorMessage(error))
       warn(`挂载 MCP 服务器 ${server.name} 失败`, error)
@@ -742,29 +745,6 @@ export function apply(ctx, config = {}) {
     })),
   }))
 
-  /**
-   * The switches of the coming turn ride on top of the record.
-   *
-   * A switch belongs to the session, so it outranks both the project and the global
-   * record: taking a name off hides it here even when a closer record enables it, and
-   * putting a name back shows it here even when every record has it switched off.
-   */
-  const withTemp = (groups, temp) => {
-    if (temp.offSkills.length === 0 && temp.onSkills.length === 0) return groups
-    const off = new Set(temp.offSkills)
-    const on = new Set(temp.onSkills)
-    return groups.map((group) => ({
-      sources: group.sources.map((entry) => ({
-        source: {
-          ...entry.source,
-          disabled: [...new Set([...entry.source.disabled.filter((name) => !on.has(name)), ...off])].sort(),
-          forced: [...on].sort(),
-        },
-        skills: entry.skills,
-      })),
-    }))
-  }
-
   /** True when this server should answer in the coming turn of that session. */
   const serverWanted = (server, temp) => {
     if (temp.onServers.includes(server.name)) return true
@@ -788,7 +768,7 @@ export function apply(ctx, config = {}) {
         invocation: { modelInvocable: skill.modelInvocable, userInvocable: skill.userInvocable },
         source: candidate.source,
         provider: SKILL_PROVIDER,
-        resourceBase: { kind: 'directory', path: locator.root },
+        resourceBase: { kind: 'directory', path: dirname(skill.path) },
         path: skill.path,
         content: skill.content,
       }
@@ -820,26 +800,27 @@ export function apply(ctx, config = {}) {
     }
   }
 
-  /** Rebuild every dynamic child from the current store. */
+  /**
+   * Bring every live session's mounts in line with the current store. A mount whose
+   * configuration did not change stays connected, so a switch in one place does not
+   * restart MCP servers anywhere else.
+   */
   const replan = () => {
     if (!mountEnabled) return
-    disposeMounts()
-    const current = currentStore()
     const sessions = sessionIndexFor()
-
-    for (const row of sessions.values()) {
-      attachAgent(row.agent, row)
-    }
-    for (const [sessionId, agent] of agentIndex) {
+    for (const row of sessions.values()) attachAgent(row.agent, row)
+    disposeMounts((mount) => !sessions.has(mount.sessionId))
+    for (const sessionId of [...agentIndex.keys()]) {
       if (sessions.has(sessionId)) continue
       agentIndex.delete(sessionId)
-      if (agent?.ctx !== undefined) disposeMounts((mount) => mount.key.includes(`:${sessionId}`))
+      scopeKeys.delete(sessionId)
     }
   }
 
   /**
-   * Mount one agent's project- and session-scoped children on ITS context. Anything
+   * Mount one agent's skill provider and MCP servers on ITS context. Anything
    * registered here is invisible to every other agent, which is the whole mechanism.
+   * Calling it again for the same agent only changes what the store changed.
    */
   const attachAgent = (agent, row = undefined) => {
     if (!mountEnabled || agent?.ctx === undefined) return
@@ -853,23 +834,6 @@ export function apply(ctx, config = {}) {
     // rather than an id.
     const who = row?.label !== undefined && row.label !== '' ? row.label : sessionRow({ id: sessionId, title: titleOf(agent), cwd: cwd ?? '' }).label
 
-    // All three scopes publish into the agent's own layer: the shipped folder readers
-    // register there too, so a folder or skill switched off here has to answer in the
-    // same layer to take the name away, and the session folder is read first so its
-    // skill wins over the project and global skills that share the name.
-    registerSkillProvider(
-      agent.ctx,
-      `skills:agent:${sessionId}`,
-      who,
-      'agent',
-      () => withTemp(groupsOf([
-        { record: currentStore().sessions[sessionId], options: { scope: 'session', projectRoot: '', sessionId, sessionRoot: SESSION_ROOT, home: HOME, env: process.env } },
-        ...(projectRoot === '' ? [] : [{ record: currentStore().projects[projectRoot], options: { scope: 'project', projectRoot, sessionId: '', sessionRoot: SESSION_ROOT, home: HOME, env: process.env } }]),
-        { record: currentStore().global, options: { scope: 'global', projectRoot: '', sessionId: '', sessionRoot: SESSION_ROOT, home: HOME, env: process.env } },
-      ]), tempOf(currentStore().sessions[sessionId])),
-      { providerName: SKILL_PROVIDER, sessionId, projectRoot },
-    )
-
     // MCP servers mount on the agent's own context as well: a server switched off for
     // the coming turn has to stop answering in that session alone. A name is claimed by
     // the closest scope that defines it, so a session server shadows the project one.
@@ -882,13 +846,47 @@ export function apply(ctx, config = {}) {
         : [{ scope: 'project', prefix: `mcp:project:${projectRoot}`, label: (name) => `${name} · ${basename(projectRoot) || projectRoot}`, servers: current.projects[projectRoot]?.mcpServers ?? [] }]),
       { scope: 'global', prefix: 'mcp:global', label: (name) => name, servers: current.global.mcpServers },
     ]
+    const wanted = new Map()
     for (const layer of layers) {
       for (const server of layer.servers) {
         if (claimed.has(server.name)) continue
         claimed.add(server.name)
         if (!serverWanted(server, temp)) continue
-        mountMcpServer(agent.ctx, server, `${layer.prefix}:${server.name}@${sessionId}`, layer.label(server.name), { scope: layer.scope, sessionId })
+        const key = `${layer.prefix}:${server.name}@${sessionId}`
+        wanted.set(key, { server, layer, signature: JSON.stringify(mcpConfigOf(server)) })
       }
+    }
+    const providerKey = `skills:agent:${sessionId}`
+    // 先卸掉不再需要或配置变了的挂载，再挂新的：同一个 serverName 在一个会话里只能有一份
+    disposeMounts((mount) => {
+      if (mount.sessionId !== sessionId) return false
+      if (mount.agent !== agent) return true
+      if (mount.key === providerKey) return false
+      const next = wanted.get(mount.key)
+      return next === undefined || next.signature !== mount.signature || mountErrors.has(mount.key)
+    })
+
+    // All three scopes publish into the agent's own layer: the shipped folder readers
+    // register there too, so a folder or skill switched off here has to answer in the
+    // same layer to take the name away, and the session folder is read first so its
+    // skill wins over the project and global skills that share the name.
+    if (!mounts.has(providerKey)) {
+      registerSkillProvider(
+        agent.ctx,
+        providerKey,
+        who,
+        'agent',
+        () => withTemp(groupsOf([
+          { record: currentStore().sessions[sessionId], options: { scope: 'session', projectRoot: '', sessionId, sessionRoot: SESSION_ROOT, home: HOME, env: process.env } },
+          ...(projectRoot === '' ? [] : [{ record: currentStore().projects[projectRoot], options: { scope: 'project', projectRoot, sessionId: '', sessionRoot: SESSION_ROOT, home: HOME, env: process.env } }]),
+          { record: currentStore().global, options: { scope: 'global', projectRoot: '', sessionId: '', sessionRoot: SESSION_ROOT, home: HOME, env: process.env } },
+        ]), tempOf(currentStore().sessions[sessionId])),
+        { providerName: SKILL_PROVIDER, sessionId, projectRoot, agent },
+      )
+    }
+    for (const [key, { server, layer, signature }] of wanted) {
+      if (mounts.has(key)) continue
+      mountMcpServer(agent.ctx, server, key, layer.label(server.name), { scope: layer.scope, sessionId, signature, agent })
     }
     if (scopeKey !== undefined) scopeKeys.set(sessionId, scopeKey)
   }
@@ -963,8 +961,8 @@ export function apply(ctx, config = {}) {
       ...source,
       skills: (source.exists ? safeList(source.dir) : []).map((skill) => ({
         ...skill,
-        // 来源要么整组开着，要么守着其中几个；两种都按 disabled 名单判定
-        enabled: source.enabled && !source.disabled.includes(skill.name),
+        // 来源要么整组开着、减去单独关掉的，要么整组关着、只开单独开启的那几个
+        enabled: skillOn(source, skill.name),
         forced: source.forced.includes(skill.name),
       })),
       error: source.exists ? '' : '目录不存在',
@@ -978,7 +976,8 @@ export function apply(ctx, config = {}) {
     for (const row of rows) {
       for (const skill of row.skills) {
         skills += 1
-        if (skill.enabled) enabled += 1
+        // 宿主读不到的技能开着也到不了模型那里，不算已启用
+        if (skill.enabled && skill.valid !== false) enabled += 1
       }
     }
     return { skills, enabled, disabled: skills - enabled, sources: rows.length, activeSources: rows.filter((row) => row.enabled).length }
@@ -1045,8 +1044,7 @@ export function apply(ctx, config = {}) {
         for (const skill of safeList(source.dir)) {
           if (!skill.valid || namedSeen.has(skill.name)) continue
           namedSeen.add(skill.name)
-          // 记录里的状态：来源要么整组开着，要么开着其中几个；两种都按 disabled 名单判定
-          const storedOn = source.enabled && !source.disabled.includes(skill.name)
+          const storedOn = skillOn(source, skill.name)
           const off = temp.offSkills.includes(skill.name)
           const forced = temp.onSkills.includes(skill.name)
           const enabled = (storedOn || forced) && off === false
@@ -1203,7 +1201,11 @@ export function apply(ctx, config = {}) {
       const next = editable()
       const record = ensureRecord(next, target)
       const state = { ...sourceStateOf(record, key) }
-      if (typeof input?.enabled === 'boolean') state.enabled = input.enabled
+      // 总开关说了算：整组打开或关掉之后，之前单独开启的名单就没有意义了
+      if (typeof input?.enabled === 'boolean') {
+        state.enabled = input.enabled
+        state.forced = []
+      }
       if (typeof input?.dir === 'string') {
         const dir = input.dir.trim()
         if (key === SESSION_SOURCE_ID) throw new Error('会话技能目录不能指向别处，请添加一个新的来源')
@@ -1217,8 +1219,9 @@ export function apply(ctx, config = {}) {
 
     addSource(input) {
       const target = scopeArgsOf(input)
-      const dir = resolve(String(input?.dir ?? '').trim())
-      if (dir === '') throw new Error('缺少目录')
+      const typed = String(input?.dir ?? '').trim()
+      if (typed === '') throw new Error('缺少目录')
+      const dir = resolve(typed)
       if (!existsSync(dir) || !statSync(dir).isDirectory()) throw new Error(`${dir} 不是一个存在的目录`)
       const next = editable()
       const record = ensureRecord(next, target)
@@ -1243,7 +1246,6 @@ export function apply(ctx, config = {}) {
       const target = scopeArgsOf(input)
       const key = String(input?.source ?? '')
       const names = Array.isArray(input?.names) ? input.names.map((name) => String(name)).filter((name) => name !== '') : []
-      const wholeGroup = input?.wholeGroup === true
       if (names.length === 0) throw new Error('缺少技能名称')
       const enabled = input?.enabled !== false
       const next = editable()
@@ -1254,20 +1256,14 @@ export function apply(ctx, config = {}) {
       const disabled = new Set(state.disabled)
       const forced = new Set(Array.isArray(state.forced) ? state.forced : [])
       for (const name of names) {
-        // 一次把整组技能按同一个状态设置：总开关留给来源卡片，这里不去动它
-        if (wholeGroup) {
-          if (enabled) disabled.delete(name)
-          else disabled.add(name)
-          forced.delete(name)
-          continue
-        }
         if (enabled) {
           disabled.delete(name)
           // 来源整组关着，单独叫起来的技能要记下来，否则它还是被总开关压着
           if (!groupOn) forced.add(name)
           else forced.delete(name)
         } else {
-          disabled.add(name)
+          // 整组关着时，关掉一个名字就是把它从单独开启的名单里拿掉
+          if (groupOn) disabled.add(name)
           forced.delete(name)
         }
       }
@@ -1283,7 +1279,13 @@ export function apply(ctx, config = {}) {
       if (!Array.isArray(input?.mcpServers)) throw new Error('缺少 mcpServers')
       const next = editable()
       const record = ensureRecord(next, target)
-      record.mcpServers = input.mcpServers.map((server, index) => normalizeServer(server, index))
+      const servers = input.mcpServers.map((server, index) => normalizeServer(server, index))
+      const seen = new Set()
+      for (const server of servers) {
+        if (seen.has(server.name)) throw new Error(`同一个范围里已经有名为「${server.name}」的服务器`)
+        seen.add(server.name)
+      }
+      record.mcpServers = servers
       commit(next)
       return runtime.view()
     },
@@ -1463,7 +1465,7 @@ export function apply(ctx, config = {}) {
     if (sessionId === '') return
     agentIndex.delete(sessionId)
     scopeKeys.delete(sessionId)
-    disposeMounts((mount) => mount.key.includes(`:${sessionId}`))
+    disposeMounts((mount) => mount.sessionId === sessionId)
   })
 
   // ── the coming-turn switches last exactly one turn

@@ -22,7 +22,7 @@ jobs:
       # 「生成物是否与源码一致」，端点或图标改了没重新生成就会在这里失败。
       - run: npm ci
       - run: npm run build
-      - run: git diff --exit-code -- src/remote.ts src/typert.ts src/logos.ts lib/
+      - run: git diff --exit-code -- src/remote.ts src/typert.ts src/logos.ts
       - run: npm run typecheck
       - run: npm test
 

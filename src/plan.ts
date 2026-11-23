@@ -17,6 +17,8 @@
  * would otherwise have supplied it.
  */
 
+import { skillOn } from './sources.js'
+
 /** Ranks the shipped folder readers use; a twin has to sort ahead of the copy it covers. */
 const SHIPPED_RANKS = { 'project-dsh': 100, 'project-agents': 200, custom: 300, 'user-dsh': 400, 'user-agents': 500, bundled: 600 }
 
@@ -33,10 +35,11 @@ export const candidateOf = (source, skill, rank, hidden, providerName) => ({
   rank,
   locator: { root: source.dir, name: skill.name, path: skill.path, hidden },
   path: skill.path,
-  resourceBase: { kind: 'directory', path: source.dir },
+  // 资源文件相对技能自己的目录：目录形态是那个文件夹，单文件形态是来源目录本身
+  resourceBase: { kind: 'directory', path: skill.resourceDir },
 })
 
-const isOn = (source, skill) => source.enabled && !source.disabled.includes(skill.name)
+const isOn = (source, skill) => skillOn(source, skill.name)
 
 /**
  * The rank a source's copies are published at.
@@ -78,6 +81,34 @@ const decide = (copies) => {
   const nearest = copies[0]
   if (isOn(nearest.source, nearest.skill)) return { copy: nearest, hidden: false }
   return { copy: nearest, hidden: true }
+}
+
+/**
+ * The switches of the coming turn ride on top of the record.
+ *
+ * A switch belongs to the session, so it outranks both the project and the global
+ * record: taking a name off hides it here even when a closer record enables it, and
+ * putting a name back shows it here even when every record has it switched off.
+ * @param groups - sources in priority order, each with the skills found on disk.
+ * @param temp - `offSkills` and `onSkills` of the coming turn.
+ * @returns groups whose sources carry the turn's switches.
+ */
+export const withTemp = (groups, temp) => {
+  if (temp.offSkills.length === 0 && temp.onSkills.length === 0) return groups
+  const off = new Set(temp.offSkills)
+  const on = new Set(temp.onSkills)
+  return groups.map((group) => ({
+    sources: group.sources.map((entry) => ({
+      source: {
+        ...entry.source,
+        // 这一回合带上的名字要穿过整组关着的来源：来源对外开门，名字记进单独开启的名单
+        enabled: entry.source.enabled || on.size > 0,
+        disabled: [...new Set([...entry.source.disabled.filter((name) => !on.has(name)), ...off])].sort(),
+        forced: [...new Set([...(entry.source.forced ?? []), ...on])].sort(),
+      },
+      skills: entry.skills,
+    })),
+  }))
 }
 
 /**

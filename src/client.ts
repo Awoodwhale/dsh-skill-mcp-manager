@@ -118,7 +118,7 @@ window.__ModuleLoader__.load({
       'title.mcp': 'MCP管理',
       'title.both': 'SKILL 与 MCP',
       'sub.skills': '技能按存放它的 Agent 分组，来源与单个技能都可以随时停用。停用不会改动磁盘上的任何文件，只影响模型能不能看到。',
-      'sub.mcp': 'MCP 服务器按范围连接，最近的那个范围里同名服务器生效。这里改的连接只在保存后生效，工具以 mcp__名称__ 前缀出现在模型里。',
+      'sub.mcp': 'MCP 服务器按范围连接，最近的那个范围里同名服务器生效。这里改的连接只在保存后生效，工具以 mcp__挂载名__ 前缀出现在模型里。',
       'head.entry': '入口',
       'head.entry.title': '选择这个插件出现在哪些位置',
       'head.refresh': '刷新',
@@ -192,7 +192,7 @@ window.__ModuleLoader__.load({
       'server.refresh': '刷新状态',
       'server.add': '添加服务器',
       'server.empty': '这个范围还没有 MCP 服务器',
-      'server.empty.body': '添加之后，它的工具会以 mcp__名称__ 前缀出现在这个范围的模型里。',
+      'server.empty.body': '添加之后，它的工具会以 mcp__挂载名__ 前缀出现在这个范围的模型里。',
       'zone.session': '这条会话',
       'zone.session.hint': '只在这条会话里生效，比项目和全局都近',
       'zone.project.hint': '同一个项目里的每条会话都会读到',
@@ -245,7 +245,7 @@ window.__ModuleLoader__.load({
       'points.modelReads': '模型只读名称、说明和触发条件，正文在真正加载时才读。',
       'points.hideOnly': '把技能停用只是把它藏起来，磁盘上的文件不会被改动。',
       'serverEditor.create': '添加 MCP 服务器',
-      'serverEditor.sub': '连接成功后，工具会以 mcp__名称__ 前缀出现，模型按需调用。',
+      'serverEditor.sub': '连接成功后，工具会以 mcp__挂载名__ 前缀出现，模型按需调用。挂载名就是服务器名，名字里有宿主不接受的字符时换成右侧预览里的 serverName。',
       'serverEditor.scope': '写入范围 · {anchor}',
       'field.serverName': '名称',
       'field.serverName.hint': '随便起名，中文也行；重名会被更靠近的范围遮住',
@@ -308,6 +308,7 @@ window.__ModuleLoader__.load({
       'confirm.removeSource.label': '移除来源',
       'note.deletedSkill': '已删除技能 {name}',
       'note.deletedServer': '已删除服务器 {name}',
+      'note.serverGone': '服务器 {name} 已不在记录里，刷新后再试',
       'note.removedSource': '已移除来源 {label}',
       'note.saved': '已保存 {name}',
       'note.refreshed': '已重新读取技能目录（{n} 个来源）',
@@ -399,6 +400,8 @@ window.__ModuleLoader__.load({
       'server.conflicts': '同名服务器在更靠近的范围里也有，最近的那个生效：{names}',
       'note.sourceOff.busy': '停用 {label}…',
       'editor.noDescription': '必须填写说明：模型只靠它决定要不要加载这个技能',
+      'editor.loading': '正在读取正文…',
+      'editor.broken': '这个技能目前宿主读不到：{problem}。改好之后保存即可',
       'serverEditor.problems': '请先改好这几行：{list}',
       'serverEditor.noCommand': '本地进程需要一条启动命令',
       'serverEditor.noUrl': 'HTTP 连接需要一个地址',
@@ -439,7 +442,7 @@ window.__ModuleLoader__.load({
       'title.mcp': 'MCP manager',
       'title.both': 'SKILL and MCP',
       'sub.skills': 'Skills are grouped by the Agent that holds them, and a source or a single skill can be turned off at any time. Switching off touches no file on disk; it only decides whether the model can see the skill.',
-      'sub.mcp': 'MCP servers connect per scope, and the nearest scope wins for a given name. A change here takes effect once saved, and the tools reach the model under the mcp__name__ prefix.',
+      'sub.mcp': 'MCP servers connect per scope, and the nearest scope wins for a given name. A change here takes effect once saved, and the tools reach the model under the mcp__mount__ prefix.',
       'head.entry': 'Places',
       'head.entry.title': 'Choose where this plugin appears',
       'head.refresh': 'Refresh',
@@ -513,7 +516,7 @@ window.__ModuleLoader__.load({
       'server.refresh': 'Refresh status',
       'server.add': 'Add server',
       'server.empty': 'No MCP server in this scope',
-      'server.empty.body': 'Once added, its tools reach the model of this scope under the mcp__name__ prefix.',
+      'server.empty.body': 'Once added, its tools reach the model of this scope under the mcp__mount__ prefix.',
       'zone.session': 'This conversation',
       'zone.session.hint': 'Applies to this conversation only, nearer than project and global',
       'zone.project.hint': 'Every conversation inside the same project reads it',
@@ -567,7 +570,7 @@ window.__ModuleLoader__.load({
       'points.modelReads': 'The model reads the name, the description, and the trigger; the body is read only when the skill loads.',
       'points.hideOnly': 'Switching a skill off only hides it; no file on disk changes.',
       'serverEditor.create': 'Add an MCP server',
-      'serverEditor.sub': 'Once connected, its tools appear under the mcp__name__ prefix and the model calls them as needed.',
+      'serverEditor.sub': 'Once connected, its tools appear under the mcp__mount__ prefix and the model calls them as needed. The mount name is the server name, or the serverName in the preview when the name holds characters the host does not accept.',
       'serverEditor.scope': 'Writes to · {anchor}',
       'field.serverName': 'Name',
       'field.serverName.hint': 'Any name works, Chinese included; a duplicate is shadowed by the nearer scope',
@@ -630,6 +633,7 @@ window.__ModuleLoader__.load({
       'confirm.removeSource.label': 'Remove source',
       'note.deletedSkill': 'Deleted the skill {name}',
       'note.deletedServer': 'Deleted the server {name}',
+      'note.serverGone': 'The server {name} is no longer in the record; refresh and try again',
       'note.removedSource': 'Removed the source {label}',
       'note.saved': 'Saved {name}',
       'note.refreshed': 'Re-read the skill directories ({n} sources)',
@@ -724,6 +728,8 @@ window.__ModuleLoader__.load({
       'server.conflicts': 'A server of the same name also sits in a nearer scope, and the nearest one wins: {names}',
       'note.sourceOff.busy': 'Disabling {label}…',
       'editor.noDescription': 'A description is required: it is all the model has to decide whether to load the skill',
+      'editor.loading': 'Reading the body…',
+      'editor.broken': 'The host cannot read this skill yet: {problem}. Fix it and save',
       'serverEditor.problems': 'Fix these rows first: {list}',
       'serverEditor.noCommand': 'A local process needs a start command',
       'serverEditor.noUrl': 'An HTTP connection needs an address',
@@ -738,19 +744,26 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * The translator the pages read. `apply` replaces it with the locale service
-     * binding; before that it answers from the Chinese table, so a render that
-     * somehow precedes activation still reads. A language that spells the singular
-     * differently adds `<key>.one`, and the lookup prefers it when `n` is exactly
-     * one; Chinese leaves that entry out and every count reads the same.
+     * The translator the pages read. A language that spells the singular differently
+     * adds `<key>.one`, and the lookup prefers it when `n` is exactly one. Only the
+     * English table has such entries; the Chinese table gets the same keys copied from
+     * the plain sentence, so the locale service never falls through to English for them.
+     * `apply` replaces `translate` with the locale service binding; before that it
+     * answers from the Chinese table, so a render that somehow precedes activation
+     * still reads.
      */
-    let table = zh
-    const oneOf = (key, params) => (params !== undefined && params.n === 1 && `${key}.one` in table ? `${key}.one` : key)
-    let t = (key, params = undefined) => {
-      const template = table[oneOf(key, params)] ?? zh[key] ?? key
+    const ONE = '.one'
+    const zhTable = {
+      ...zh,
+      ...Object.fromEntries(Object.keys(en).filter((key) => key.endsWith(ONE)).map((key) => [key, zh[key.slice(0, -ONE.length)]])),
+    }
+    let translate = (key, params = undefined) => {
+      const template = zhTable[key] ?? key
       if (params === undefined) return template
       return template.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match))
     }
+    const t = (key, params = undefined) =>
+      translate(params !== undefined && params.n === 1 && `${key}${ONE}` in en ? `${key}${ONE}` : key, params)
 
     /**
      * The shell keeps one hook the pages use to redraw the sidebar entries and the
@@ -1303,10 +1316,14 @@ window.__ModuleLoader__.load({
       onClick,
     }, children)
 
-    /** The dialog shell both editors share: fixed head, scrolling body, action foot. */
-    const Sheet = ({ title, subtitle, onClose, footer, children, small, medium }) => h(Modal, {
+    /**
+     * The dialog shell both editors share: fixed head, scrolling body, action foot.
+     * While `busy`, the dialog cannot be dismissed: the request in flight still has to
+     * report back into it.
+     */
+    const Sheet = ({ title, subtitle, onClose, footer, children, small, medium, busy }) => h(Modal, {
       open: true,
-      onClose,
+      onClose: busy === true ? () => undefined : onClose,
       title,
       headless: true,
       backdropBlur: true,
@@ -1323,6 +1340,7 @@ window.__ModuleLoader__.load({
           className: 'acap-icon-btn',
           'aria-label': t('composer.close'),
           title: t('composer.close'),
+          disabled: busy === true,
           onClick: onClose,
         }, icon(IconClose, { size: 14 })),
       ]),
@@ -1433,7 +1451,7 @@ window.__ModuleLoader__.load({
       if (raw !== null && typeof raw === 'object' && 'ok' in raw) {
         if (raw.ok === false) {
           const failure = raw.error
-          throw new Error(typeof failure === 'string' ? failure : String((failure && (failure.message || failure.code)) || '远程调用失败'))
+          throw new Error(typeof failure === 'string' ? failure : String((failure && (failure.message || failure.code)) || t('note.callFailed')))
         }
         return raw.value
       }
@@ -1532,11 +1550,15 @@ window.__ModuleLoader__.load({
         }
         this.pollTimer = undefined
         this.mcpSeq = 0
+        // 每次打开编辑器、目录选择器、模型视角都换一张票；回包时票不对就丢掉
+        this.ticket = 0
+        // 服务器列表与显示位置都是整份写回，排队执行才能让后一次基于前一次的结果
+        this.writes = Promise.resolve()
       }
 
       componentDidMount() {
         this.mounted = true
-        this.watch = () => this.patch({ localeRev: localeRevision })
+        this.watch = () => this.onChange({ localeRev: localeRevision })
         localeListeners.add(this.watch)
         void this.load()
       }
@@ -1554,7 +1576,18 @@ window.__ModuleLoader__.load({
 
       onChange(patch) {
         if (this.mounted !== true) return
+        if (patch.view !== undefined) this.latestView = patch.view
         this.setState(patch)
+      }
+
+      /**
+       * Run one whole-list write after every write before it has come back. Each job
+       * reads the record it rewrites when it starts, so two quick switches both land.
+       */
+      queued(job) {
+        const next = this.writes.then(job, job)
+        this.writes = next.catch(() => undefined)
+        return next
       }
 
       say(status, statusTone = 'ok') {
@@ -1774,7 +1807,7 @@ window.__ModuleLoader__.load({
 
       /** The record of one scope, whichever one a handler was handed. */
       entryOf(at) {
-        const view = this.state.view
+        const view = this.latestView ?? this.state.view
         if (view === undefined) return undefined
         const args = this.scopeArgsOf(at)
         if (args.scope === 'project') return (view.projects ?? []).find((row) => row.root === args.root)
@@ -1783,16 +1816,20 @@ window.__ModuleLoader__.load({
       }
 
       async saveServer(index, server) {
-        const at = this.state.serverEditor?.at
-        const entry = this.entryOf(at)
-        const servers = (entry?.servers ?? []).map((row) => ({ ...row }))
-        if (index === -1) servers.push(server)
-        else servers[index] = server
-        this.onChange({ serverEditor: { ...this.state.serverEditor, busy: t('editor.saving'), error: '' } })
-        const result = await this.call('saveServers', { ...this.scopeArgsOf(at), mcpServers: servers })
+        const editor = this.state.serverEditor
+        const at = editor?.at
+        this.onChange({ serverEditor: { ...editor, busy: t('editor.saving'), error: '' } })
+        const result = await this.queued(() => {
+          const servers = (this.entryOf(at)?.servers ?? []).map((row) => ({ ...row }))
+          if (index === -1) servers.push(server)
+          else servers[index] = server
+          return this.call('saveServers', { ...this.scopeArgsOf(at), mcpServers: servers })
+        })
         const failure = errorOf(result)
         if (failure !== '') {
-          this.onChange({ serverEditor: { ...this.state.serverEditor, busy: '', error: failure } })
+          // 编辑器在保存途中被关掉时，错误只能走提示条
+          if (this.state.serverEditor === undefined) this.say(failure, 'error')
+          else this.onChange({ serverEditor: { ...this.state.serverEditor, busy: '', error: failure } })
           return
         }
         this.onChange({ view: result, serverEditor: undefined, ...this.selectionOf(result) })
@@ -1801,12 +1838,16 @@ window.__ModuleLoader__.load({
       }
 
       async toggleServer(index, server, at) {
-        const entry = this.entryOf(at)
-        const servers = (entry?.servers ?? []).map((row) => ({ ...row }))
-        servers[index] = { ...servers[index], enabled: server.enabled !== true }
-        const { error } = await this.run('saveServers', { ...this.scopeArgsOf(at), mcpServers: servers })
+        const enabled = server.enabled !== true
+        const { error } = await this.queued(() => {
+          const servers = (this.entryOf(at)?.servers ?? []).map((row) => ({ ...row }))
+          const position = servers.findIndex((row) => row.name === server.name)
+          if (position === -1) return { error: t('note.serverGone', { name: server.name }) }
+          servers[position] = { ...servers[position], enabled }
+          return this.run('saveServers', { ...this.scopeArgsOf(at), mcpServers: servers })
+        })
         if (error !== '') this.say(error, 'error')
-        else this.say(servers[index].enabled ? t('note.skillOn', { name: server.name }) : t('note.skillOff', { name: server.name }))
+        else this.say(enabled ? t('note.skillOn', { name: server.name }) : t('note.skillOff', { name: server.name }))
       }
 
       async removeServer(index, server, at) {
@@ -1816,9 +1857,10 @@ window.__ModuleLoader__.load({
             body: t('confirm.server.body'),
             confirmLabel: t('confirm.deleteServer.label'),
             run: async () => {
-              const entry = this.entryOf(at)
-              const servers = (entry?.servers ?? []).filter((_row, position) => position !== index)
-              const { error } = await this.run('saveServers', { ...this.scopeArgsOf(at), mcpServers: servers })
+              const { error } = await this.queued(() => {
+                const servers = (this.entryOf(at)?.servers ?? []).filter((row) => row.name !== server.name)
+                return this.run('saveServers', { ...this.scopeArgsOf(at), mcpServers: servers })
+              })
               if (error !== '') throw new Error(error)
               this.setState({ confirm: undefined })
               this.say(t('note.deletedServer', { name: server.name }))
@@ -1852,7 +1894,8 @@ window.__ModuleLoader__.load({
         })
         const failure = errorOf(result)
         if (failure !== '') {
-          this.onChange({ skillEditor: { ...editor, busy: '', error: failure } })
+          if (this.state.skillEditor?.ticket !== editor.ticket) this.say(failure, 'error')
+          else this.onChange({ skillEditor: { ...this.state.skillEditor, busy: '', error: failure } })
           return
         }
         this.onChange({ view: result, skillEditor: undefined, ...this.selectionOf(result) })
@@ -1892,8 +1935,11 @@ window.__ModuleLoader__.load({
       }
 
       async inspectCatalog() {
+        const seq = ++this.ticket
+        this.catalogSeq = seq
         this.onChange({ catalog: { loading: true, names: [], layer: '' } })
         const result = await this.call('skillCatalog', this.scopeArgs())
+        if (this.catalogSeq !== seq || this.state.catalog === undefined) return
         const failure = errorOf(result)
         if (failure !== '') {
           this.onChange({ catalog: { loading: false, error: failure, names: [] } })
@@ -1908,7 +1954,10 @@ window.__ModuleLoader__.load({
       }
 
       async loadDir(path) {
+        const seq = ++this.ticket
+        this.pickerSeq = seq
         const result = await this.call('listDir', { path })
+        if (this.pickerSeq !== seq || this.state.picker === undefined) return
         const failure = errorOf(result)
         if (failure !== '') {
           this.onChange({ picker: { ...this.state.picker, loading: false, error: failure } })
@@ -1941,20 +1990,25 @@ window.__ModuleLoader__.load({
         const base = skill === undefined
           ? { name: '', description: '', whenToUse: '', content: '', modelInvocable: true, userInvocable: true, form: 'dir', renameFrom: '', path: '' }
           : { name: skill.name, description: skill.description, whenToUse: skill.whenToUse, content: '', modelInvocable: skill.modelInvocable, userInvocable: skill.userInvocable, form: skill.form, renameFrom: skill.name, path: skill.path }
-        this.onChange({ skillEditor: { ...base, at: this.scopeArgsOf(at), source: source.key, sourceLabel: source.label, dir: source.dir, mode: skill === undefined ? 'create' : 'edit', error: '', busy: '' } })
-        if (skill !== undefined) void this.loadSkillBody(source, skill.name, at)
+        const ticket = ++this.ticket
+        this.onChange({ skillEditor: { ...base, ticket, at: this.scopeArgsOf(at), source: source.key, sourceLabel: source.label, dir: source.dir, mode: skill === undefined ? 'create' : 'edit', error: '', busy: skill === undefined ? '' : t('editor.loading') } })
+        if (skill !== undefined) void this.loadSkillBody(source, skill.name, at, ticket)
       }
 
-      async loadSkillBody(source, skillName, at) {
+      /** 正文读回来之前编辑器处于忙碌状态，保存按钮不可用，免得用空正文覆盖文件。 */
+      async loadSkillBody(source, skillName, at, ticket) {
         const result = await this.call('readSkill', { ...this.scopeArgsOf(at), source: source.key, name: skillName })
+        if (this.state.skillEditor?.ticket !== ticket) return
         const failure = errorOf(result)
         if (failure !== '') {
-          this.onChange({ skillEditor: { ...this.state.skillEditor, error: failure } })
+          this.onChange({ skillEditor: { ...this.state.skillEditor, busy: '', error: failure } })
           return
         }
         this.onChange({
           skillEditor: {
             ...this.state.skillEditor,
+            busy: '',
+            error: result.valid === false ? t('editor.broken', { problem: result.problem }) : '',
             name: result.name,
             description: result.description,
             whenToUse: result.whenToUse,
@@ -2201,7 +2255,7 @@ window.__ModuleLoader__.load({
         const selected = sessions.find((row) => row.id === this.state.sessionId)
         return h('div', { key: 'anchor', className: 'acap-anchor acap-anchor-block' }, [
           h('div', { key: 'bar', className: 'acap-anchor acap-picker-bar' }, [
-            h('span', { key: 'l', className: 'acap-anchor-label' }, '会话'),
+            h('span', { key: 'l', className: 'acap-anchor-label' }, t('anchor.session')),
             h('div', { key: 'f', className: 'acap-picker-field' }, h(Input, {
               value: this.state.sessionQuery,
               placeholder: t('anchor.session.filter'),
@@ -2345,8 +2399,9 @@ window.__ModuleLoader__.load({
       renderSource(source, at) {
         const skills = source.skills ?? []
         const closed = this.state.collapsed?.[source.key] === true
-        const open = skills.filter((skill) => skill.enabled === true && skill.valid !== false)
         const shut = skills.filter((skill) => skill.enabled !== true && skill.valid !== false)
+        // 整组按钮只看宿主读得到的技能，解析异常的那几个开不开都一样
+        const allOpen = shut.length === 0
         return h('article', { key: source.key, className: 'acap-src', 'data-off': source.enabled !== true, 'data-hue': hueOf(source.custom === true ? 'custom' : source.id) }, [
           h('header', { key: 'h', className: 'acap-src-head' }, [
             h('button', {
@@ -2377,10 +2432,10 @@ window.__ModuleLoader__.load({
                 variant: 'ghost',
                 size: 'sm',
                 disabled: source.enabled !== true,
-                title: open.length === skills.length ? t('source.group.off.title') : t('source.group.on.title'),
-                onClick: () => void this.toggleGroup(source, skills, open.length !== skills.length, at),
-              }, open.length === skills.length ? t('source.group.off') : t('source.group.on')),
-              h(Switch, { key: 'sw', checked: source.enabled === true, label: t('source.enable', { label: source.label }), title: t('source.enable.title'), onChange: (next) => void this.toggleSource(source, next, at) }),
+                title: allOpen ? t('source.group.off.title') : t('source.group.on.title'),
+                onClick: () => void this.toggleGroup(source, skills, !allOpen, at),
+              }, allOpen ? t('source.group.off') : t('source.group.on')),
+              h(Switch, { key: 'sw', checked: source.groupOn !== false && source.enabled === true, label: t('source.enable', { label: source.label }), title: t('source.enable.title'), onChange: (next) => void this.toggleSource(source, next, at) }),
               source.custom === true
                 ? h(IconButton, { key: 'rm', label: t('source.remove', { label: source.label }), danger: true, onClick: () => void this.removeSource(source, at) }, icon(IconTrash, { size: 13 }))
                 : null,
@@ -2400,17 +2455,22 @@ window.__ModuleLoader__.load({
 
       /** One switch for a whole source: every skill in it, or none. */
       async toggleGroup(source, skills, enabled, at) {
+        // 整组关着、只单独开了几个时，「整组启用」就是打开总开关
+        if (enabled && source.groupOn === false) return this.toggleSource(source, true, at)
         const names = skills.filter((skill) => skill.valid !== false).map((skill) => skill.name)
         if (names.length === 0) return
-        const result = await this.run('toggleSkills', { ...this.scopeArgsOf(at), source: source.key, names, enabled, wholeGroup: true })
+        const result = await this.run('toggleSkills', { ...this.scopeArgsOf(at), source: source.key, names, enabled })
         if (result.error === '') this.say(t('note.sourceToggle', { label: source.label, state: enabled ? t('note.sourceEnabled') : t('note.sourceDisabled'), n: names.length }))
         else this.say(result.error, 'error')
       }
 
       /** Save one place switch and let the shell redraw its slots. */
       async savePlace(key, value) {
-        const prefs = { ...(this.state.view?.prefs ?? {}), [key]: value }
-        const result = await this.run('savePrefs', prefs)
+        let prefs
+        const result = await this.queued(() => {
+          prefs = { ...((this.latestView ?? this.state.view)?.prefs ?? {}), [key]: value }
+          return this.run('savePrefs', prefs)
+        })
         if (result.error !== '') {
           this.say(result.error, 'error')
           return
@@ -2709,6 +2769,7 @@ window.__ModuleLoader__.load({
           title: editor.mode === 'create' ? t('editor.create') : t('editor.edit', { name: editor.renameFrom }),
           subtitle: editor.mode === 'create' ? t('editor.create.sub') : t('editor.edit.sub'),
           onClose: () => this.onChange({ skillEditor: undefined }),
+          busy: editor.busy !== '',
           footer: h(React.Fragment, null, [
             h('span', { key: 'h', className: 'acap-sheet-hint', title: dir }, `${editor.sourceLabel ?? ''} · ${editor.mode === 'create' ? t('editor.new') : t('editor.editing')}`),
             h('span', { key: 'g', className: 'acap-grow' }),
@@ -2849,6 +2910,7 @@ window.__ModuleLoader__.load({
           title: editor.mode === 'create' ? t('serverEditor.create') : t('editor.edit', { name: server.name }),
           subtitle: t('serverEditor.sub'),
           onClose: () => this.onChange({ serverEditor: undefined }),
+          busy: editor.busy !== '',
           footer: h(React.Fragment, null, [
             h('span', { key: 'h', className: 'acap-sheet-hint' }, t('serverEditor.scope', { anchor: this.anchorText() })),
             h('span', { key: 'g', className: 'acap-grow' }),
@@ -3001,6 +3063,7 @@ window.__ModuleLoader__.load({
           subtitle: confirm.body,
           small: true,
           onClose: () => this.onChange({ confirm: undefined }),
+          busy: confirm.busy === true,
           footer: h(React.Fragment, null, [
             h('span', { key: 'g', className: 'acap-grow' }),
             h(Button, { key: 'c', variant: 'outline', size: 'sm', disabled: confirm.busy === true, onClick: () => this.onChange({ confirm: undefined }) }, t('confirm.cancel')),
@@ -3019,7 +3082,7 @@ window.__ModuleLoader__.load({
               },
             }, confirm.confirmLabel),
           ]),
-        }, confirm.error === undefined ? null : h(Notice, { tone: 'error' }, confirm.error))
+        }, confirm.error === undefined || confirm.error === '' ? null : h(Notice, { tone: 'error' }, confirm.error))
       }
     }
 
@@ -3418,14 +3481,9 @@ window.__ModuleLoader__.load({
 
       // The two tables live in this bundle; the locale service owns which one is read
       // and tells every subscriber when the language changes, so the pages redraw.
-      const bindLanguage = () => {
-        table = ctx.locale.getLocale() === 'zh' ? zh : en
-        t = ctx.locale.bind(LOCALE_NS)
-      }
-      bindLanguage()
-      ctx.effect(() => ctx.locale.register(LOCALE_NS, { zh, en }))
+      translate = ctx.locale.bind(LOCALE_NS)
+      ctx.effect(() => ctx.locale.register(LOCALE_NS, { zh: zhTable, en }))
       ctx.effect(() => ctx.locale.subscribe(() => {
-        bindLanguage()
         watchLocale()
         syncShell(localePrefs)
       }))

@@ -16,7 +16,7 @@ for (const name of ['equal', 'deepEqual', 'ok', 'match', 'notEqual', 'throws']) 
   }
 }
 
-const { planCandidates } = await import(new URL('../lib/plan.js', import.meta.url).href)
+const { planCandidates, withTemp } = await import(new URL('../lib/plan.js', import.meta.url).href)
 
 const PROVIDER = 'skill-mcp-manager'
 
@@ -26,6 +26,7 @@ const skill = (name, extra = {}) => ({
   whenToUse: '',
   form: 'dir',
   path: `/skills/${name}/SKILL.md`,
+  resourceDir: `/skills/${name}`,
   modelInvocable: true,
   userInvocable: true,
   valid: true,
@@ -44,6 +45,7 @@ const source = (id, extra = {}) => ({
   hostScanned: false,
   enabled: true,
   disabled: [],
+  forced: [],
   exists: true,
   scope: 'global',
   rank: 10,
@@ -65,7 +67,7 @@ const byName = (rows, name) => rows.find((row) => row.name === name)
   assert.equal(byName(rows, 'pdf').source, 'claude')
   assert.equal(byName(rows, 'pdf').path, '/skills/pdf/SKILL.md')
   assert.deepEqual(byName(rows, 'pdf').locator, { root: '/skills/claude', name: 'pdf', path: '/skills/pdf/SKILL.md', hidden: false })
-  assert.equal(byName(rows, 'pdf').resourceBase.path, '/skills/claude')
+  assert.equal(byName(rows, 'pdf').resourceBase.path, '/skills/pdf', '资源目录是技能自己的文件夹，和宿主读取器一致')
 }
 
 {
@@ -177,15 +179,15 @@ const byName = (rows, name) => rows.find((row) => row.name === name)
   assert.equal(rows.length, 1, '两组来源各占一个号，但同一个名字只出一条候选')
 }
 
-// ── the switches of the coming turn outrank the record ─────────────────────
+// ── a group switched off still hands out the names opened one by one ───────
 
 {
   const rows = planCandidates([group([
-    { source: source('claude', { enabled: true, disabled: ['docx'] }), skills: [skill('pdf'), skill('docx')] },
+    { source: source('claude', { enabled: true, groupOn: false, forced: ['pdf'] }), skills: [skill('pdf'), skill('docx')] },
   ])], PROVIDER)
-  assert.deepEqual(names(rows), ['pdf', 'docx'], '开着的名字照常发布，关着的那一个留在候选里当影子')
-  assert.equal(byName(rows, 'pdf').locator.hidden, false, '这一次带上的是可见候选')
-  assert.equal(byName(rows, 'docx').locator.hidden, true, '这一次不带的名字要用影子把名字压住')
+  assert.deepEqual(names(rows), ['pdf', 'docx'])
+  assert.equal(byName(rows, 'pdf').locator.hidden, false, '单独开启的名字是可见候选')
+  assert.equal(byName(rows, 'docx').locator.hidden, true, '整组关着时，其余名字仍然只发影子')
 }
 
 {
@@ -196,13 +198,31 @@ const byName = (rows, name) => rows.find((row) => row.name === name)
   assert.equal(rows[0].locator.hidden, true)
 }
 
+// ── the switches of the coming turn outrank the record ─────────────────────
+
 {
-  const rows = planCandidates([group([
-    { source: source('claude', { enabled: true, disabled: ['docx'] }), skills: [skill('pdf'), skill('docx')] },
-  ])], PROVIDER)
-  assert.deepEqual(names(rows), ['pdf', 'docx'], '开着的照常发布，关着的那一个留一条影子把名字压住')
-  assert.equal(byName(rows, 'pdf').locator.hidden, false)
-  assert.equal(byName(rows, 'docx').locator.hidden, true)
+  const groups = [group([{ source: source('claude', { enabled: false, groupOn: false, forced: [] }), skills: [skill('pdf'), skill('docx')] }])]
+  const rows = planCandidates(withTemp(groups, { offSkills: [], onSkills: ['pdf'] }), PROVIDER)
+  assert.equal(byName(rows, 'pdf').locator.hidden, false, '这一次带上的名字能穿过整组停用的来源')
+  assert.equal(byName(rows, 'docx').locator.hidden, true, '同一个来源里没带上的名字仍然关着')
+}
+
+{
+  const groups = [group([{ source: source('claude', { enabled: true, groupOn: false, forced: ['pdf'] }), skills: [skill('pdf'), skill('docx')] }])]
+  const rows = planCandidates(withTemp(groups, { offSkills: ['docx'], onSkills: [] }), PROVIDER)
+  assert.equal(byName(rows, 'pdf').locator.hidden, false, '这一次只挡掉别的名字时，记录里单独开启的名字照样开着')
+}
+
+{
+  const groups = [group([{ source: source('claude', { enabled: true, disabled: ['docx'] }), skills: [skill('pdf'), skill('docx')] }])]
+  const rows = planCandidates(withTemp(groups, { offSkills: ['pdf'], onSkills: ['docx'] }), PROVIDER)
+  assert.equal(byName(rows, 'pdf').locator.hidden, true, '这一次不带的名字盖过记录里的开')
+  assert.equal(byName(rows, 'docx').locator.hidden, false, '这一次带上的名字盖过记录里的关')
+}
+
+{
+  const groups = [group([{ source: source('claude'), skills: [skill('pdf')] }])]
+  assert.equal(withTemp(groups, { offSkills: [], onSkills: [] }), groups, '没有临时开关时原样返回')
 }
 
 {

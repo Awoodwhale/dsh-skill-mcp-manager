@@ -73,7 +73,7 @@ jobs:
         run: npm run build
 
       - name: 生成物已提交
-        run: git diff --exit-code -- src/remote.ts src/typert.ts src/logos.ts lib/
+        run: git diff --exit-code -- src/remote.ts src/typert.ts src/logos.ts
 
       - name: 类型检查
         run: npm run typecheck

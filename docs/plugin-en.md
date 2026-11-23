@@ -25,7 +25,7 @@ Switching off never touches a file on disk: it only decides whether the model ca
 
 ## MCP servers
 
-Servers follow the same scopes, and the nearest scope wins for a given name. Two transports are supported: a local process (command plus arguments, started and stopped by the plugin) and HTTP (an endpoint already running). Saving connects immediately; the card shows the tool count and tool names, and tools reach the model under the `mcp__name__` prefix. Disabling or deleting closes the process and the connection together.
+Servers follow the same scopes, and the nearest scope wins for a given name. Two transports are supported: a local process (command plus arguments, started and stopped by the plugin) and HTTP (an endpoint already running). Saving connects immediately; the card shows the tool count and tool names, and tools reach the model under the `mcp__mount__` prefix (the mount name is the server name, or the `serverName` shown in the editor preview when the name holds characters the host does not accept). Disabling or deleting closes the process and the connection together.
 
 ## What one message carries
 

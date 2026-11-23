@@ -119,7 +119,7 @@ for (const [index, method] of RPC_ENDPOINTS.entries()) {
   assert.equal(host.includes("'agent/turn-stopping'") || host.includes('"agent/turn-stopping"'), true, '临时开关要随回合结束清空')
   assert.equal(host.includes('hasTemp'), true, '清空只处理真正带临时开关的会话')
   assert.equal(host.includes('serverWanted'), true, 'MCP 服务器也要能被这一次发送挡掉')
-  assert.equal(host.includes('forced: [...on].sort()'), true, '这一次带上的名字要交给候选规划器，否则停用的来源带不上')
+  assert.equal(host.includes('withTemp(groupsOf('), true, '这一次的开关要叠在记录上再交给候选规划器')
   assert.equal(host.includes("'sessionTitle'") || host.includes('"sessionTitle"'), true, '会话列表要用会话标题，只显示标识看不出是哪一条')
 }
 
@@ -142,7 +142,7 @@ for (const [index, method] of RPC_ENDPOINTS.entries()) {
   delete globalThis.window
 
   const client = text('lib/client.js')
-  assert.equal(client.includes("ctx.locale.register(LOCALE_NS, { zh, en })"), true, '两种语言的词条要注册到 locale 服务，否则语言一换这里还是旧语言')
+  assert.equal(client.includes("ctx.locale.register(LOCALE_NS, { zh: zhTable, en })"), true, '两种语言的词条要注册到 locale 服务，否则语言一换这里还是旧语言')
   assert.equal(client.includes("ctx.locale.bind(LOCALE_NS)"), true, '取词条要走 locale 服务，跟随界面语言')
   assert.equal(client.includes('localeListeners.add('), true, '语言变化要通知页面重画，否则要点一次刷新才看得到')
   assert.equal(client.includes('settings.section'), true)

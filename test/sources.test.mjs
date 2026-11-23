@@ -39,6 +39,7 @@ const {
   catalogOf,
   resolveSources,
   rootDirOf,
+  skillOn,
   sourceDirOf,
 } = await import(new URL('../lib/sources.js', import.meta.url).href)
 
@@ -112,6 +113,27 @@ assert.equal(sourceDirOf(catalogOf('claude'), { ...options, scope: 'project', pr
   assert.equal(claude.enabled, true, '单独开了几个，这个来源就得对外开门，否则开了也用不上')
   assert.deepEqual(claude.forced, ['pdf', 'docx'], '界面靠这一栏认出哪几个是单独开的')
   assert.deepEqual(claude.disabled, [], '单独开起来的那几个就是开着的，不算在关着的名单里')
+  assert.equal(claude.groupOn, false, '总开关仍然是关着的')
+  assert.equal(skillOn(claude, 'pdf'), true, '单独开启的名字是开着的')
+  assert.equal(skillOn(claude, 'docx'), true)
+  assert.equal(skillOn(claude, 'pptx'), false, '整组关着时，没有单独开启的名字仍然关着')
+}
+
+{
+  // 整组开着时，单独关掉的名字关着，其余名字开着；旧记录里残留的单独开启名单不再起作用
+  const rows = resolveSources({ sources: { claude: { enabled: true, disabled: ['pdf'], forced: ['docx'] } } }, { ...options, scope: 'global' })
+  const claude = rows.find((row) => row.key === 'claude')
+  assert.equal(claude.groupOn, true)
+  assert.deepEqual(claude.forced, [], '整组开着时没有「单独开启」可言')
+  assert.equal(skillOn(claude, 'pdf'), false)
+  assert.equal(skillOn(claude, 'pptx'), true)
+}
+
+{
+  const rows = resolveSources({ sources: { claude: { enabled: false } } }, { ...options, scope: 'global' })
+  const claude = rows.find((row) => row.key === 'claude')
+  assert.equal(claude.enabled, false)
+  assert.equal(skillOn(claude, 'pdf'), false, '整组关着又没有单独开启时，什么都不发')
 }
 
 {

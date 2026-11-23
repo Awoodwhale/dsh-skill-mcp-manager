@@ -72,10 +72,36 @@ export const recordOf = (text, fallbackName = '') => {
   record.name = typeof frontmatter.name === 'string' ? frontmatter.name.trim() : fallbackName
   record.description = typeof frontmatter.description === 'string' ? frontmatter.description.trim() : ''
   record.whenToUse = typeof frontmatter.whenToUse === 'string' ? frontmatter.whenToUse.trim() : ''
-  if (frontmatter['disable-model-invocation'] === true) record.modelInvocable = false
-  if (frontmatter['user-invocable'] === false) record.userInvocable = false
+  if (frontmatterBoolean(frontmatter, 'disable-model-invocation') === true) record.modelInvocable = false
+  if (frontmatterBoolean(frontmatter, 'user-invocable') === false) record.userInvocable = false
   record.content = body.replace(/^\r?\n/, '')
   return record
+}
+
+/** 与宿主自带读取器同一套布尔写法：true/false、1/0、yes/no、on/off。 */
+const frontmatterBoolean = (frontmatter, key) => {
+  if (!Object.hasOwn(frontmatter, key)) return undefined
+  const value = frontmatter[key]
+  if (typeof value === 'boolean') return value
+  if (value === 1 || value === '1') return true
+  if (value === 0 || value === '0') return false
+  if (typeof value === 'string') {
+    const word = value.toLowerCase()
+    if (word === 'true' || word === 'yes' || word === 'on') return true
+    if (word === 'false' || word === 'no' || word === 'off') return false
+  }
+  throw new Error(`frontmatter 字段 ${key} 必须是布尔值，收到 ${JSON.stringify(value)}`)
+}
+
+/** 宿主读取器同样的门槛：frontmatter 里要有合法的 name 和非空的 description。 */
+const recordProblem = (text, record) => {
+  const { present, frontmatter } = splitFrontmatter(text)
+  if (!present) return '缺少 frontmatter'
+  if (typeof frontmatter.name !== 'string' || frontmatter.name.trim() === '') return 'frontmatter 缺少 name'
+  const problem = skillNameProblem(record.name)
+  if (problem !== '') return problem
+  if (record.description === '') return 'frontmatter 缺少 description'
+  return ''
 }
 
 /** Render a record back into the file the provider reads. */
@@ -97,31 +123,11 @@ export const skillPathOf = (root, name, form = 'dir') =>
   form === 'file' ? join(root, `${name}.md`) : join(root, name, SKILL_FILE)
 
 /**
- * Locate an existing skill by name, preferring the directory bundle. Returns
- * `undefined` when the root holds neither form.
+ * Every top-level entry the provider would read, in the order the shipped reader walks
+ * them: by entry name. When two entries claim the same skill name, the first one here is
+ * the one the registry keeps.
  */
-export const locateSkill = (root, name) => {
-  const bundle = join(root, name)
-  try {
-    if (statSync(join(bundle, SKILL_FILE)).isFile()) return { form: 'dir', path: join(bundle, SKILL_FILE), bundle }
-  } catch {
-    /* not a directory bundle */
-  }
-  const flat = join(root, `${name}.md`)
-  try {
-    if (statSync(flat).isFile()) return { form: 'file', path: flat, bundle: undefined }
-  } catch {
-    /* not a flat skill */
-  }
-  return undefined
-}
-
-/**
- * Every skill entry the provider would discover under `root`, in name order.
- * A broken entry is reported with its parse error instead of being dropped, so the
- * settings page can show why a skill the model never sees is invisible.
- */
-export const listSkills = (root) => {
+const entriesOf = (root) => {
   let entries
   try {
     entries = readdirSync(root, { withFileTypes: true })
@@ -130,31 +136,50 @@ export const listSkills = (root) => {
     throw error
   }
   const skills = []
-  for (const entry of entries) {
+  for (const entry of [...entries].sort((left, right) => left.name.localeCompare(right.name))) {
     if (entry.name.startsWith('.')) continue
     if (entry.isDirectory()) {
       const file = join(root, entry.name, SKILL_FILE)
       if (!existsSync(file)) continue
-      skills.push(skillEntryOf(file, entry.name, 'dir'))
+      skills.push(skillEntryOf(file, entry.name, 'dir', join(root, entry.name)))
       continue
     }
     if (entry.isFile() && entry.name.endsWith('.md')) {
-      const name = entry.name.slice(0, -3)
-      if (name === '') continue
-      skills.push(skillEntryOf(join(root, entry.name), name, 'file'))
+      const stem = entry.name.slice(0, -3)
+      if (stem === '') continue
+      skills.push(skillEntryOf(join(root, entry.name), stem, 'file', undefined))
     }
   }
-  skills.sort((left, right) => left.name.localeCompare(right.name))
   return skills
 }
 
-const skillEntryOf = (file, fallbackName, form) => {
-  const base = { name: fallbackName, form, path: file, description: '', whenToUse: '', modelInvocable: true, userInvocable: true, valid: true, error: '' }
+/**
+ * Locate an existing skill by the name its frontmatter declares, which is the name the
+ * registry and the settings page use. The folder or file it sits in may be named
+ * differently. Returns `undefined` when no entry in the root declares that name.
+ */
+export const locateSkill = (root, name) => {
+  if (typeof name !== 'string' || name === '') return undefined
+  const found = entriesOf(root).find((skill) => skill.name === name)
+  if (found === undefined) return undefined
+  return { form: found.form, path: found.path, bundle: found.bundle }
+}
+
+/**
+ * Every skill entry the provider would discover under `root`, in name order.
+ * A broken entry is reported with its parse error instead of being dropped, so the
+ * settings page can show why a skill the model never sees is invisible.
+ */
+export const listSkills = (root) =>
+  entriesOf(root).sort((left, right) => left.name.localeCompare(right.name))
+
+const skillEntryOf = (file, fallbackName, form, bundle) => {
+  const base = { name: fallbackName, form, path: file, bundle, resourceDir: dirname(file), description: '', whenToUse: '', modelInvocable: true, userInvocable: true, valid: true, error: '' }
   try {
     const stat = statSync(file)
     const text = readFileSync(file, 'utf8')
     const record = recordOf(text, fallbackName)
-    const problem = skillNameProblem(record.name)
+    const problem = recordProblem(text, record)
     return {
       ...base,
       name: record.name,
@@ -172,7 +197,11 @@ const skillEntryOf = (file, fallbackName, form) => {
   }
 }
 
-/** Read one skill in full, or `undefined` when the root no longer holds it. */
+/**
+ * Read one skill in full, or `undefined` when the root no longer holds it. A broken
+ * document still comes back with its whole text as `content`, so the editor can repair
+ * it; `problem` says what is wrong with it.
+ */
 export const readSkill = (root, name) => {
   const located = locateSkill(root, name)
   if (located === undefined) return undefined
@@ -181,41 +210,43 @@ export const readSkill = (root, name) => {
   let problem = ''
   try {
     record = recordOf(text, name)
-    problem = skillNameProblem(record.name)
+    problem = recordProblem(text, record)
   } catch (error) {
     record = { ...emptyRecord(), name, content: text }
     problem = error.message
   }
-  return { ...record, form: located.form, path: located.path, valid: problem === '', error: problem, text }
+  return { ...record, form: located.form, path: located.path, bundle: located.bundle, valid: problem === '', problem, text }
 }
 
 /**
- * Write one skill, creating or replacing it. `renameFrom` moves an existing entry
- * instead of leaving a duplicate behind. The body lands through a temporary file in
- * the same directory so a reader never sees half a document.
+ * Write one skill, creating or replacing it. An existing skill is rewritten where it
+ * sits, whatever its folder is called. `renameFrom` moves an existing entry: a directory
+ * bundle moves as a whole, resource files included. The body lands through a temporary
+ * file in the same directory so a reader never sees half a document.
  */
 export const writeSkill = (root, record, { renameFrom = '', form = 'dir' } = {}) => {
   const problem = skillNameProblem(record.name)
   if (problem !== '') throw new Error(problem)
+  if (typeof record.description !== 'string' || record.description.trim() === '') throw new Error('说明不能为空：宿主读不到没有 description 的技能')
   mkdirSync(root, { recursive: true })
-  const target = skillPathOf(root, record.name, form)
-  const previous = renameFrom !== '' && renameFrom !== record.name ? locateSkill(root, renameFrom) : undefined
+  const renaming = renameFrom !== '' && renameFrom !== record.name
+  const previous = renaming ? locateSkill(root, renameFrom) : undefined
+  if (renaming && previous === undefined) throw new Error(`「${renameFrom}」不存在（可能已被删除）`)
   const existing = locateSkill(root, record.name)
-  if (existing !== undefined && previous !== undefined) throw new Error(`「${record.name}」已存在，不能把「${renameFrom}」改名到它上面`)
+  if (existing !== undefined && renaming) throw new Error(`「${record.name}」已存在，不能把「${renameFrom}」改名到它上面`)
   const targetForm = existing?.form ?? previous?.form ?? form
-  const finalPath = skillPathOf(root, record.name, targetForm)
-  mkdirSync(dirname(finalPath), { recursive: true })
-  const text = documentOf(record)
-  const temporary = `${finalPath}.tmp-${process.pid}`
-  writeFileSync(temporary, text, { encoding: 'utf8', mode: 0o644 })
-  renameSync(temporary, finalPath)
-  if (previous !== undefined) {
-    try {
-      rmSync(previous.form === 'dir' ? join(root, renameFrom) : join(root, `${renameFrom}.md`), { recursive: true, force: true })
-    } catch {
-      /* the old entry is gone already */
-    }
+  let finalPath = existing?.path
+  if (finalPath === undefined) {
+    finalPath = skillPathOf(root, record.name, targetForm)
+    const occupied = targetForm === 'dir' ? join(root, record.name) : finalPath
+    if (existsSync(occupied)) throw new Error(`${occupied} 已被占用，换一个名字`)
+    if (previous?.form === 'dir') renameSync(previous.bundle, occupied)
+    else mkdirSync(dirname(finalPath), { recursive: true })
   }
+  const temporary = `${finalPath}.tmp-${process.pid}`
+  writeFileSync(temporary, documentOf(record), { encoding: 'utf8', mode: 0o644 })
+  renameSync(temporary, finalPath)
+  if (previous?.form === 'file') rmSync(previous.path)
   return { path: finalPath, form: targetForm, created: existing === undefined && previous === undefined }
 }
 
@@ -223,23 +254,18 @@ export const writeSkill = (root, record, { renameFrom = '', form = 'dir' } = {})
 export const deleteSkill = (root, name) => {
   const located = locateSkill(root, name)
   if (located === undefined) throw new Error(`「${name}」不存在（可能已被删除）`)
-  rmSync(located.form === 'dir' ? join(root, name) : located.path, { recursive: true, force: true })
+  rmSync(located.bundle ?? located.path, { recursive: true, force: true })
   return { path: located.path, form: located.form }
 }
 
 /** Resource files a directory bundle carries next to SKILL.md. */
 export const skillResources = (root, name) => {
   const located = locateSkill(root, name)
-  if (located === undefined || located.form !== 'dir') return []
-  const directory = join(root, name)
-  try {
-    return readdirSync(directory, { withFileTypes: true })
-      .filter((entry) => entry.name !== SKILL_FILE && !entry.name.startsWith('.'))
-      .map((entry) => ({ name: entry.name, directory: entry.isDirectory() }))
-      .sort((left, right) => left.name.localeCompare(right.name))
-  } catch {
-    return []
-  }
+  if (located === undefined || located.bundle === undefined) return []
+  return readdirSync(located.bundle, { withFileTypes: true })
+    .filter((entry) => entry.name !== SKILL_FILE && !entry.name.startsWith('.'))
+    .map((entry) => ({ name: entry.name, directory: entry.isDirectory() }))
+    .sort((left, right) => left.name.localeCompare(right.name))
 }
 
 /** True when the root already holds a skill of that name, in either form. */

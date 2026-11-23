@@ -5,7 +5,7 @@
  *
  * No DSH service is touched here, so the offline tests can drive every rule.
  */
-import { existsSync, statSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { basename, join, resolve, sep } from 'node:path'
 
 export const STORE_VERSION = 3
@@ -249,7 +249,7 @@ export const ensureRecord = (store, target) => {
 export const sourceStateOf = (record, key) => record?.sources?.[key] ?? { enabled: null, dir: '', disabled: [], forced: [] }
 
 /** The project root a working directory belongs to: the nearest ancestor holding `.git`. */
-export const projectRootOf = (cwd, isDirectory = (path) => existsSync(path) && statSync(path).isDirectory()) => {
+export const projectRootOf = (cwd) => {
   if (typeof cwd !== 'string' || cwd === '') return ''
   let current = resolve(cwd)
   const start = current

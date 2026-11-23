@@ -75,21 +75,31 @@ const splitState = (state) => ({
 /**
  * The switches one source ends up with.
  *
- * A record either leaves the whole group on, or keeps only the names the person opened
- * one by one. Opening a single name means that name, so the source hands out names again
- * while every other name in it is switched off. `disabled` therefore holds exactly the
- * names that are off, and `forced` is the record of which ones were opened on top of a
- * group that stays off — it does not itself switch anything off.
+ * A record either leaves the whole group on, or keeps the group off and opens a few names
+ * one by one. `groupOn` is the group switch; `forced` lists the names opened while the
+ * group is off, and only those names are on in that case. `enabled` says whether the
+ * source hands out any name at all, and `disabled` lists the names switched off one by one.
  * @param state - the stored entry, or undefined for a source nobody touched.
  * @param fallback - the state the catalog says a fresh installation starts in.
- * @returns `enabled`, `disabled`, `forced`.
+ * @returns `enabled`, `groupOn`, `disabled`, `forced`.
  */
 export const switchesOf = (state, fallback) => {
   const { enabled, disabled, forced } = splitState(state)
   const groupOn = typeof enabled === 'boolean' ? enabled : fallback
   const opened = new Set(forced)
   const off = disabled.filter((name) => !opened.has(name))
-  return { enabled: groupOn || forced.length > 0, disabled: off, forced }
+  return { enabled: groupOn || forced.length > 0, groupOn, disabled: off, forced: groupOn ? [] : forced }
+}
+
+/**
+ * Whether one name in a resolved source is on.
+ * @param source - a row from resolveSources.
+ * @param name - the skill name.
+ * @returns true when the model and the slash menu may see this copy.
+ */
+export const skillOn = (source, name) => {
+  if (source.enabled !== true || source.disabled.includes(name)) return false
+  return source.groupOn !== false || source.forced.includes(name)
 }
 
 /**

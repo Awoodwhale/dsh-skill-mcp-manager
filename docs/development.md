@@ -85,9 +85,9 @@ npm test             # 五个测试文件 + 两份生成物的漂移比对
 
 | 文件 | 关注点 |
 |---|---|
-| `skills.test.mjs` | frontmatter 解析、正文渲染、名称合法性、目录形式的写入 |
-| `sources.test.mjs` | 十五行目录表、环境变量覆盖、会话来源、额外目录、优先级、`forced` 透传 |
-| `plan.test.mjs` | 三组展开顺序、关掉的名字必发同名占位、占位的排名比来源靠前一位、更近一层关掉时占位取最近那份、`forced` 在整组关闭时仍发布 |
+| `skills.test.mjs` | frontmatter 解析与宿主一致的布尔写法、正文渲染、名称合法性、按 frontmatter 名字定位（目录名不同也找得对，`..` 找不到）、改名时整个目录搬走、缺 description 判为无效 |
+| `sources.test.mjs` | 十五行目录表、环境变量覆盖、会话来源、额外目录、优先级、`groupOn` 与 `forced` 的换算、`skillOn` |
+| `plan.test.mjs` | 关掉的名字必发同名占位、占位的排名比来源靠前、更近一层关掉时占位取最近那份、`forced` 在整组关闭时只发布被单独打开的名字、`withTemp` 的这一次带上与不带 |
 | `store.test.mjs` | 记录规范化、空记录清理、`mountNameOf` 派生、服务器 id 稳定性 |
 | `remote.test.mjs` | 端点表与宿主侧逐条对应、页面调用的每个方法都存在、产物注释与 manifest、生成物与源码不一致 |
 

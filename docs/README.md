@@ -12,7 +12,7 @@
 | `scripts/` | `generate-remote.mjs` 由端点表生成两份描述文件，`generate-logos.mjs` 由图标源生成 `src/logos.ts`，`install.sh` 把插件装进一个 profile |
 | `test/` | 五个测试文件与一个零依赖的 MCP stdio 服务（`test/fixture/mcp-server.mjs`） |
 | `docs/` | 面向开发者的说明：`architecture.md` 讲结构，`development.md` 讲怎么跑、怎么改、哪里容易踩到问题，`images/` 是 README 用的截图 |
-| `.github/workflows/ci.yml` | 每个提交跑两个任务：全平台测试与打包冒烟 |
+| `.github/workflows/ci.yml` | 每个提交跑两个任务：Node 22 与 24 上的构建与测试，以及打包冒烟 |
 
 ## 三条不许破的规矩
 
@@ -28,7 +28,7 @@
 npm run build && npm run typecheck && npm test
 ```
 
-三条都过再提交。改了 `endpoints.ts` 或 `assets/logos/` 却忘了生成，第二条会直接指出哪个文件漂移了。
+三条都过再提交。改了 `endpoints.ts` 或 `assets/logos/` 却忘了生成，第三条里的 `--check` 会失败并指出该重新生成哪一份。
 
 版本号、改动记录写在 `package.json` 与 `CHANGELOG.md` 里，两者同步更新。
 
