@@ -3481,6 +3481,8 @@ window.__ModuleLoader__.load({
 
       // The two tables live in this bundle; the locale service owns which one is read
       // and tells every subscriber when the language changes, so the pages redraw.
+      // 订阅回调在挂载远程之前就可能触发，所以它读的偏好要在订阅之前声明。
+      let localePrefs = {}
       translate = ctx.locale.bind(LOCALE_NS)
       ctx.effect(() => ctx.locale.register(LOCALE_NS, { zh: zhTable, en }))
       ctx.effect(() => ctx.locale.subscribe(() => {
@@ -3546,7 +3548,6 @@ window.__ModuleLoader__.load({
       }, ComposerToggles))
 
       // Everything else is optional and follows the place switches in the page.
-      let localePrefs = {}
       const handles = []
       const clear = () => {
         for (const dispose of handles.splice(0)) {

@@ -2,6 +2,10 @@
 
 版本从 0.1.0 重新起算。0.1.0 之后的段落记录首次发布前的开发过程；0.1.0 这一条写的是第一次发布时插件已有的全部能力。
 
+## 0.1.11
+
+- 页面加载时浏览器控制台不再报 `locale subscriber crashed: ReferenceError: Cannot access 'localePrefs' before initialization`：locale 服务在远程挂载完成之前就会通知订阅者，订阅回调读的偏好现在先于订阅声明。
+
 ## 0.1.10
 
 - 官方 `@deepseek-ai/*` 包的 peerDependencies 范围补上 `0.2.2` 的预发布分支（`^0.2.1-rc.2 || ^0.2.2-0`）。原来的 `^0.2.1-rc.2` 按 semver 规则不匹配 `0.2.2-rc.*`，和 `0.2.2-rc.*` 的官方包一起用 npm 安装时会报 `ERESOLVE`。

@@ -145,6 +145,8 @@ for (const [index, method] of RPC_ENDPOINTS.entries()) {
   assert.equal(client.includes("ctx.locale.register(LOCALE_NS, { zh: zhTable, en })"), true, '两种语言的词条要注册到 locale 服务，否则语言一换这里还是旧语言')
   assert.equal(client.includes("ctx.locale.bind(LOCALE_NS)"), true, '取词条要走 locale 服务，跟随界面语言')
   assert.equal(client.includes('localeListeners.add('), true, '语言变化要通知页面重画，否则要点一次刷新才看得到')
+  const prefsAt = client.indexOf('let localePrefs')
+  assert.equal(prefsAt >= 0 && prefsAt < client.indexOf('ctx.locale.subscribe('), true, 'locale 服务在挂载远程之前就会通知订阅者，订阅回调读的 localePrefs 必须先声明，否则启动时抛 ReferenceError')
   assert.equal(client.includes('settings.section'), true)
   const decoded = client
     .replace(/\\u([0-9a-fA-F]{4})/gu, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
